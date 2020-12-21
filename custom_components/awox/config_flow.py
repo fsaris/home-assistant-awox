@@ -167,10 +167,10 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_MESH_NAME: credentials['client_id'],
             CONF_MESH_PASSWORD: credentials['access_token'],
             CONF_MESH_KEY: credentials['refresh_token'],
-            'awox_connect': {
-                CONF_USERNAME: user_input[CONF_USERNAME],
-                CONF_PASSWORD: user_input[CONF_PASSWORD]
-            },
+            # 'awox_connect': {
+            #     CONF_USERNAME: user_input[CONF_USERNAME],
+            #     CONF_PASSWORD: user_input[CONF_PASSWORD]
+            # },
             'devices': devices
         }
 
