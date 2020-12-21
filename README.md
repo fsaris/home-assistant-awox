@@ -17,6 +17,15 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 
 ## Installation
 
+### Install pre-conditions
+Your Home Assistant system needs to have access to a bluetooth device to access the lights. 
+
+Further it requires pybluez to be installed. On Debian based installs, run
+
+```
+sudo apt install bluetooth libbluetooth-dev
+```
+
 ### Install with HACS (recommended)
 
 Do you have [HACS](https://hacs.xyz/) installed?
