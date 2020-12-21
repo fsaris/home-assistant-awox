@@ -1,0 +1,11 @@
+{
+  "domain": "awox",
+  "name": "AwoX MESH control",
+  "documentation": "https://github.com/fsaris/home-assistant-awox",
+  "dependencies": [],
+  "codeowners": ["@fsaris"],
+  "requirements": [
+    "bluepy"
+  ],
+  "config_flow": true
+}

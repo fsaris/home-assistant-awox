@@ -1,0 +1,7 @@
+{
+  "name": "AwoX MESH control - BETA",
+  "domains": ["light"],
+  "homeassistant": "2020.12.0",
+  "render_readme": true,
+  "iot_class": ["Local Push", "Local Poll"]
+}
