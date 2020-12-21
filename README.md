@@ -1,9 +1,9 @@
 # BETA - AwoX MESH control component for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz/)
 ![stability-wip](https://img.shields.io/badge/stability-beta-red.svg?style=for-the-badge&color=red)
 
-![AwoX Smart Control](./images/icon.png)
+![AwoX Smart Control](https://github.com/fsaris/home-assistant-awox/blob/main/images/icon.png?raw=true)
 
 Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 
@@ -19,12 +19,16 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 
 ### Install with HACS (recommended)
 
-Do you have [HACS](https://community.home-assistant.io/t/custom-component-hacs) installed?
-1. Add **AwoX** as custom repository.  
+Do you have [HACS](https://hacs.xyz/) installed?
+1. Add **AwoX** as custom repository.
    1. Go to: `HACS` -> `Integrations` -> Click menu in right top -> Custom repositories
    1. A modal opens
-   1. Fill `https://github.com/fsaris/home-assistant-awox` in the input in the footer of the modal and click **Add** 
-1. Search integrations for **AwoX**    
+   1. Fill https://github.com/fsaris/home-assistant-awox in the input in the footer of the modal
+   1. Select `integration` in category select box
+   1. Click **Add**
+1. Search integrations for **AwoX**
+1. Click `Install`
+1. Restart Home Assistant
 1. See Setup for how to add your lights to HA
 
 ### Install manually
