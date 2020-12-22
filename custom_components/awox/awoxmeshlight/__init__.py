@@ -249,7 +249,7 @@ class AwoxMeshLight:
             self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
 
         try:
-            logger.info("[%s] Writing command %i data %s", self.mac, command, repr(data))
+            logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
             self.command_char.write(packet)
         except btle.BTLEInternalError as err:
             logger.warning('command response failed but we ignore is for now: %s', err)
@@ -257,7 +257,7 @@ class AwoxMeshLight:
             logger.error('command failed [%s]', err)
             logger.info('[%s] (Re)load characteristics', self.mac)
             self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
-            logger.info("[%s] Writing command %i data %s", self.mac, command, repr(data))
+            logger.info("[%s][%d] (Re)Writing command %i data %s", self.mac, dest, command, repr(data))
             self.command_char.write(packet)
 
     def resetMesh(self):
