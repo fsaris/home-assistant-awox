@@ -38,11 +38,12 @@ class AwoxMesh:
         }
 
         self._hass.async_create_task(self.async_update())
+        _LOGGER.info('Registered [%s] %d', mac, mesh_id)
 
     def is_connected(self) -> bool:
         return self._connected_bluetooth_device and self._connected_bluetooth_device.session_key
 
-    async def connect_device(self):
+    async def async_connect_device(self):
         if self._connecting or self.is_connected():
             return
 
@@ -68,7 +69,7 @@ class AwoxMesh:
 
     @callback
     async def async_update(self, *args, **kwargs) -> None:
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.debug('async_update: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -101,7 +102,7 @@ class AwoxMesh:
         self._devices[status['mesh_id']]['last_update'] = datetime.now()
 
     async def async_on(self, mesh_id: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_on: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -113,7 +114,7 @@ class AwoxMesh:
             _LOGGER.error('Failed to turn on [%d] - %s', mesh_id, e)
 
     async def async_off(self, mesh_id: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_off: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -125,7 +126,7 @@ class AwoxMesh:
             _LOGGER.error('Failed to turn off [%d] - %s', mesh_id, e)
 
     async def async_set_color(self, mesh_id: int, r: int, g: int, b: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_set_color: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -137,7 +138,7 @@ class AwoxMesh:
             _LOGGER.error('Failed to set color for [%d] - %s', mesh_id, e)
 
     async def async_set_color_brightness(self, mesh_id: int, brightness: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_set_color_brightness: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -149,7 +150,7 @@ class AwoxMesh:
             _LOGGER.error('Failed to set color brightness for [%d] - %s', mesh_id, e)
 
     async def async_set_white_temperature(self, mesh_id: int, white_temperature: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_set_white_temperature: No connected device - Connection in progress [%s]', self._connecting)
             return
@@ -161,7 +162,7 @@ class AwoxMesh:
             _LOGGER.error('Failed to set white temperature for [%d] - %s', mesh_id, e)
 
     async def async_set_white_brightness(self, mesh_id: int, brightness: int):
-        await self.connect_device()
+        await self.async_connect_device()
         if not self.is_connected():
             _LOGGER.error('async_set_white_brightness: No connected device - Connection in progress [%s]', self._connecting)
             return
