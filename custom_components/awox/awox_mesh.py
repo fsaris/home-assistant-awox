@@ -37,7 +37,7 @@ class AwoxMesh:
             'last_update': None
         }
 
-        self._hass.async_create_task(self.connect_device())
+        self._hass.async_create_task(self.async_update())
 
     def is_connected(self) -> bool:
         return self._connected_bluetooth_device and self._connected_bluetooth_device.session_key
@@ -65,13 +65,12 @@ class AwoxMesh:
                 _LOGGER.warning('[%s] Failed to connect, trying next device [%s]', device.mac, e)
 
         self._connecting = False
-        self._hass.async_create_task(self.async_update())
 
     @callback
     async def async_update(self, *args, **kwargs) -> None:
         await self.connect_device()
         if not self.is_connected():
-            _LOGGER.debug('async_update: No connected device')
+            _LOGGER.debug('async_update: No connected device - Connection in progress [%s]', self._connecting)
             return
 
         # Disable devices we didn't get a response the last 30 minutes
@@ -103,53 +102,72 @@ class AwoxMesh:
 
     async def async_on(self, mesh_id: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.on(mesh_id)
-            except Exception as e:
-                _LOGGER.error('Failed to turn on [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_on: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.on, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to turn on [%d] - %s', mesh_id, e)
 
     async def async_off(self, mesh_id: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.off(mesh_id)
-            except Exception as e:
-                await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
-                _LOGGER.error('Failed to turn off [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_off: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.off, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to turn off [%d] - %s', mesh_id, e)
 
     async def async_set_color(self, mesh_id: int, r: int, g: int, b: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.setColor(r, g, b, mesh_id)
-            except Exception as e:
-                await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
-                _LOGGER.error('Failed to set color for [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_set_color: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.setColor, r, g, b, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to set color for [%d] - %s', mesh_id, e)
 
     async def async_set_color_brightness(self, mesh_id: int, brightness: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.setColorBrightness(brightness, mesh_id)
-            except Exception as e:
-                await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
-                _LOGGER.error('Failed to set color brightness for [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_set_color_brightness: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.setColorBrightness, brightness, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to set color brightness for [%d] - %s', mesh_id, e)
 
     async def async_set_white_temperature(self, mesh_id: int, white_temperature: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.setWhiteTemperature(white_temperature, mesh_id)
-            except Exception as e:
-                await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
-                _LOGGER.error('Failed to set white temperature for [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_set_white_temperature: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.setWhiteTemperature, white_temperature, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to set white temperature for [%d] - %s', mesh_id, e)
 
     async def async_set_white_brightness(self, mesh_id: int, brightness: int):
         await self.connect_device()
-        if self.is_connected():
-            try:
-                self._connected_bluetooth_device.setWhiteBrightness(brightness, mesh_id)
-            except Exception as e:
-                await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
-                _LOGGER.error('Failed to set white brightness for [%d]', mesh_id)
+        if not self.is_connected():
+            _LOGGER.error('async_set_white_brightness: No connected device - Connection in progress [%s]', self._connecting)
+            return
+
+        try:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.setWhiteBrightness, brightness, mesh_id)
+        except Exception as e:
+            await self._hass.async_add_executor_job(self._connected_bluetooth_device.disconnect)
+            _LOGGER.error('Failed to set white brightness for [%d] - %s', mesh_id, e)
