@@ -149,19 +149,27 @@ class AwoxLight(LightEntity):
     @property
     def color_temp(self):
         """Return the color temperature in mired."""
+        if self._white_temperature is None:
+            return None
         return int(self._white_temperature)
 
     @property
     def white_value(self):
         """Return the white property (white brightness)."""
+        if self._white_brightness is None:
+            return None
         return int(int(self._white_brightness) / int(0x7f) * 255)
 
     @property
     def brightness(self):
         """Return the brightness of the light."""
         if not self._color_mode and not self._supported_features & SUPPORT_WHITE_VALUE:
+            if self._white_brightness is None:
+                return None
             return int(int(self._white_brightness) / int(0x7f) * 255)
         else:
+            if self._color_brightness is None:
+                return None
             min_device = int(0xa)
             max_device = int(0x64)
             max_ha = 255
