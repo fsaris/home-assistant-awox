@@ -57,6 +57,15 @@ C_TIME = 0xe4
 #: 10 bytes
 C_ALARMS = 0xe5
 
+#: Request current light/device status
+C_GET_STATUS_SENT = 0xda
+
+#: Response of light/device status request
+C_GET_STATUS_RECEIVED = 0xdb
+
+#: State notification
+C_NOTIFICATION_RECEIVED = 0xdc
+
 PAIR_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1914'
 COMMAND_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1912'
 STATUS_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1911'
@@ -141,8 +150,7 @@ class AwoxMeshLight:
 
         reply = bytearray(pair_char.read())
         if reply[0] == 0xd:
-            self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, self.session_random,
-                                                     reply[1:9])
+            self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, self.session_random, reply[1:9])
             return True
         else:
             if reply[0] == 0xe:
@@ -270,9 +278,9 @@ class AwoxMeshLight:
         return pckt.decrypt_packet(self.session_key, self.mac, packet)
 
     def parseStatusResult(self, data):
-        command = struct.unpack('b', data[7:8])[0]
+        command = struct.unpack('B', data[7:8])[0]
         status = {}
-        if command == -37:
+        if command == C_GET_STATUS_RECEIVED:
             mode = struct.unpack('B', data[10:11])[0]
             mesh_id = (struct.unpack('B', data[4:5])[0] * 256) + struct.unpack('B', data[3:4])[0]
             white_brightness, white_temperature = struct.unpack('BB', data[11:13])
@@ -290,7 +298,7 @@ class AwoxMeshLight:
                 'color_brightness': color_brightness,
             }
 
-        if command == -36:
+        if command == C_NOTIFICATION_RECEIVED:
             mesh_id = (struct.unpack('B', data[19:20])[0] * 256) + struct.unpack('B', data[10:11])[0]
             mode = struct.unpack('B', data[12:13])[0]
             white_brightness, white_temperature = struct.unpack('BB', data[13:15])
@@ -329,7 +337,7 @@ class AwoxMeshLight:
 
     def requestStatus(self, dest=None):
         data = struct.pack('B', 16)
-        self.writeCommand(0xda, data, dest)
+        self.writeCommand(C_GET_STATUS_SENT, data, dest)
 
     def setColor(self, red, green, blue, dest=None):
         """
