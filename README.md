@@ -57,10 +57,8 @@ Do you have [HACS](https://hacs.xyz/) installed?
 
 
 ## Todo
-- [ ] Improve start-up _(Home Assistant freezes until connected with first light in mesh)_
 - [ ] Improve stability of mesh connection  
 - [ ] Finish support adding lights without **AwoX Smart Control** account _(full local support)_
-- [ ] Improve light feature support recognition _(now all lights are sign as dimmable RGBW lights)_  
 - [ ] Add **non** mesh light support _(not sure is there is a request for this)_
 - [ ] Add support for non light devices (plugs, remotes, etc)
 
