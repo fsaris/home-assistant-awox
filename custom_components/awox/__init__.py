@@ -1,6 +1,6 @@
+"""AwoX integration."""
 
 import logging
-from datetime import timedelta
 
 from .awox_mesh import AwoxMesh
 from .const import DOMAIN, CONF_MESH_NAME, CONF_MESH_PASSWORD, CONF_MESH_KEY
@@ -33,12 +33,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Setup lights
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(entry, LIGHT_DOMAIN)
-    )
-
-    # Start update interval
-    # @todo: change to DataUpdateCoordinator see https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    hass.helpers.event.async_track_time_interval(
-        mesh.async_update, timedelta(seconds=30)
     )
 
     return True

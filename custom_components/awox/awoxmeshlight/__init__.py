@@ -251,14 +251,12 @@ class AwoxMeshLight:
         try:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
             self.command_char.write(packet)
+        except btle.BTLEDisconnectError as err:
+            logger.error('Command failed, device is disconnected: %s', err)
+            self.session_key = None
+            raise err
         except btle.BTLEInternalError as err:
-            logger.warning('command response failed but we ignore is for now: %s', err)
-        except Exception as err:
-            logger.error('command failed [%s]', err)
-            logger.info('[%s] (Re)load characteristics', self.mac)
-            self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
-            logger.info("[%s][%d] (Re)Writing command %i data %s", self.mac, dest, command, repr(data))
-            self.command_char.write(packet)
+            logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
 
     def resetMesh(self):
         """
@@ -272,52 +270,50 @@ class AwoxMeshLight:
         return pckt.decrypt_packet(self.session_key, self.mac, packet)
 
     def parseStatusResult(self, data):
-        mesh_id = (struct.unpack('B', data[19:20])[0] * 256) + struct.unpack('B', data[10:11])[0]
-
-        mode = struct.unpack('B', data[12:13])[0]
         command = struct.unpack('b', data[7:8])[0]
+        status = {}
+        if command == -37:
+            mode = struct.unpack('B', data[10:11])[0]
+            mesh_id = (struct.unpack('B', data[4:5])[0] * 256) + struct.unpack('B', data[3:4])[0]
+            white_brightness, white_temperature = struct.unpack('BB', data[11:13])
+            color_brightness, red, green, blue = struct.unpack('BBBB', data[13:17])
+            status = {
+                'mesh_id': mesh_id,
+                'state': (mode & 1) == 1,
+                'color_mode': ((mode >> 1) & 1) == 1,
+                'transition_mode': ((mode >> 2) & 1) == 1,
+                'red': red,
+                'green': green,
+                'blue': blue,
+                'white_temperature': white_temperature,
+                'white_brightness': white_brightness,
+                'color_brightness': color_brightness,
+            }
 
-        if command != -36:
-            logger.info("Skipped parsing status, unknown command: %s [%s]", command, data)
-            return
+        if command == -36:
+            mesh_id = (struct.unpack('B', data[19:20])[0] * 256) + struct.unpack('B', data[10:11])[0]
+            mode = struct.unpack('B', data[12:13])[0]
+            white_brightness, white_temperature = struct.unpack('BB', data[13:15])
+            color_brightness, red, green, blue = struct.unpack('BBBB', data[15:19])
 
-        source = struct.unpack('bb', data[3:5])
-        address = struct.unpack('bb', data[5:7])
-        vendor = struct.unpack('BB', data[8:10])
-        white_brightness, white_temperature = struct.unpack('BB', data[13:15])
-        color_brightness, red, green, blue = struct.unpack('BBBB', data[15:19])
+            status = {
+                'mesh_id': mesh_id,
+                'state': (mode & 1) == 1,
+                'color_mode': ((mode >> 1) & 1) == 1,
+                'transition_mode': ((mode >> 2) & 1) == 1,
+                'red': red,
+                'green': green,
+                'blue': blue,
+                'white_temperature': white_temperature,
+                'white_brightness': white_brightness,
+                'color_brightness': color_brightness,
+            }
 
-        logger.debug(
-            'mesh_id: %d - source: %s - address: %s, vendor: %s, '
-            'mode: %s, on: %s, colormode: %s, white: %d (%d) RGB %d %d %d (%d)',
-            mesh_id,
-            source,
-            address,
-            vendor,
-            '{:b}'.format(mode),
-            (mode & 1) == 1,
-            ((mode >> 1) & 1) == 1,
-            white_temperature,
-            white_brightness,
-            red, green, blue,
-            color_brightness
-        )
+        if status:
+            logger.debug('parsed status %s', status)
 
-        status = {
-            'mesh_id': mesh_id,
-            'state': (mode & 1) == 1,
-            'color_mode': ((mode >> 1) & 1) == 1,
-            'transition_mode': ((mode >> 2) & 1) == 1,
-            'red': red,
-            'green': green,
-            'blue': blue,
-            'white_temperature': white_temperature,
-            'white_brightness': white_brightness,
-            'color_brightness': color_brightness,
-        }
-
-        if mesh_id == self.mesh_id:
-            logger.info('Update light status - mesh_id %d', mesh_id)
+        if status and status['mesh_id'] == self.mesh_id:
+            logger.info('Update light status - mesh_id %d', status['mesh_id'])
             self.state = status['state']
             self.color_mode = status['color_mode']
             self.transition_mode = status['transition_mode']
@@ -328,8 +324,12 @@ class AwoxMeshLight:
             self.green = status['green']
             self.blue = status['blue']
 
-        if self.status_callback:
+        if status and self.status_callback:
             self.status_callback(status)
+
+    def requestStatus(self, dest=None):
+        data = struct.pack('B', 16)
+        self.writeCommand(0xda, data, dest)
 
     def setColor(self, red, green, blue, dest=None):
         """
