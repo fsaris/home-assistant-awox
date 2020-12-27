@@ -94,7 +94,8 @@ class AwoxMesh(DataUpdateCoordinator):
                 # Force status update
                 if device_info['last_update'] is None \
                         or device_info['last_update'] < datetime.now() - timedelta(seconds=30):
-                    await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, mesh_id)
+                    async with async_timeout.timeout(1):
+                        await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, mesh_id)
                     # Give mesh time to gather status updates
                     await asyncio.sleep(.5)
 
@@ -105,11 +106,13 @@ class AwoxMesh(DataUpdateCoordinator):
                     device_info['callback']({'state': None})
                     device_info['last_update'] = None
 
-            await self.hass.async_add_executor_job(self._connected_bluetooth_device.readStatus)
+            async with async_timeout.timeout(1):
+                await self.hass.async_add_executor_job(self._connected_bluetooth_device.readStatus)
             _LOGGER.info('async_update: Read status done')
 
         except BTLEException as e:
             _LOGGER.warning("readStatus failed [%s] disconnect and retry next run", e)
+            await self.async_connect_device()
             raise UpdateFailed(f"Invalid response from MESH: {e}") from e
 
     @callback
