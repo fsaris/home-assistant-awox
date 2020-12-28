@@ -102,17 +102,22 @@ class AwoxMesh(DataUpdateCoordinator):
                 # Disable devices we didn't get a response the last 30 minutes
                 if self._connected_bluetooth_device.mesh_id != mesh_id \
                         and device_info['last_update'] is not None \
-                        and device_info['last_update'] < datetime.now() - timedelta(minutes=1):
+                        and device_info['last_update'] < datetime.now() - timedelta(minutes=2):
                     device_info['callback']({'state': None})
                     device_info['last_update'] = None
 
+            _LOGGER.info('async_update: Force status updates')
             async with async_timeout.timeout(1):
                 await self.hass.async_add_executor_job(self._connected_bluetooth_device.readStatus)
             _LOGGER.info('async_update: Read status done')
 
+        except asyncio.exceptions.TimeoutError as e:
+            _LOGGER.warning("readStatus timeout [%s] disconnect and retry next run", e)
+            await self._disconnect_current_device()
+            raise UpdateFailed(f"Timeout from MESH: {e}") from e
         except BTLEException as e:
             _LOGGER.warning("readStatus failed [%s] disconnect and retry next run", e)
-            await self.async_connect_device()
+            await self._disconnect_current_device()
             raise UpdateFailed(f"Invalid response from MESH: {e}") from e
 
     @callback
@@ -132,7 +137,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.on, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to turn on [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
@@ -144,7 +148,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.off, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to turn off [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
@@ -156,7 +159,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.setColor, r, g, b, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to set color for [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
@@ -168,7 +170,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.setColorBrightness, brightness, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to set color brightness for [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
@@ -180,7 +181,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.setWhiteTemperature, white_temperature, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to set white temperature for [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
@@ -192,7 +192,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
         try:
             await self.hass.async_add_executor_job(self._connected_bluetooth_device.setWhiteBrightness, brightness, mesh_id)
-            self._devices[mesh_id]['last_update'] = None
         except Exception as e:
             _LOGGER.exception('Failed to set white brightness for [%d] - %s [%d]', mesh_id, e, _attempt)
             await self._disconnect_current_device()
