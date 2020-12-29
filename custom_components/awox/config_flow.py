@@ -147,14 +147,19 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         devices = []
         for device in awox_connect.devices():
+            _LOGGER.debug('Processing device - %s', device)
+            if 'type' not in device:
+                _LOGGER.warning('Skipped device, missing type - %s', device)
+                continue
+
             devices.append({
                 'mesh_id': int(device['address']),
                 'name': device['displayName'],
                 'mac': device['macAddress'],
-                'model': device['modelName'],
-                'manufacturer': device['vendor'],
-                'firmware': device['version'],
-                'hardware': device['hardwareVersion'],
+                'model': 'modelName' in device if device['modelName'] else 'unknown',
+                'manufacturer': 'vendor' in device if device['vendor'] else 'unknown',
+                'firmware':  'version' in device if device['version'] else None,
+                'hardware':  'hardwareVersion' in device if device['hardwareVersion'] else None,
                 'type': device['type']
             })
 
