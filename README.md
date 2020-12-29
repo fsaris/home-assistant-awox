@@ -7,9 +7,16 @@
 
 Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 
+> Work is based on the [python-awox-mesh-light](https://github.com/Leiaz/python-awox-mesh-light) Python package created by @leiaz to control AwoX mesh lights bulbs.
+
 ## Current BETA state
-- Only tested with Eglo (120) RGBW spots (in a mesh of 15 devices)
-- firmware v2.2.6
+- Tested with following lights:
+  - Eglo (120) RGBW spots (`ESpot_120` HW v4.3)
+  - LED strip 3m (HW v4.0 and v4.3)
+  - LED strip 5m (HW v4.3)
+  - `ECeil_G60` (HW v4.0)
+  - `EPanel_120` (HW v4.0)
+- Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`
 
 ## Current features
 - Supports RGBW mesh lights
@@ -25,6 +32,8 @@ Further it requires pybluez to be installed. On Debian based installs, run
 ```
 sudo apt install bluetooth libbluetooth-dev
 ```
+
+> Make sure that at least **1 device/light** is in **bluetooth range** of your Home Assistant server.
 
 ### Install with HACS (recommended)
 
@@ -64,6 +73,8 @@ Do you have [HACS](https://hacs.xyz/) installed?
 
 
 ## Troubleshooting
+**Make sure that at least *1 device/light* is in *bluetooth range* of your Home Assistant server.**
+
 If you run into issues during setup or controlling the lights please increase logging and provide them when creating an issue:
 
 Add `custom_components.awox: debug` to the `logger` config in you `configuration.yaml`:
