@@ -32,6 +32,7 @@ Further it requires pybluez to be installed. On Debian based installs, run
 ```
 sudo apt install bluetooth libbluetooth-dev
 ```
+_(already part of Home Assistant Operating System / HassOS)_
 
 > Make sure that at least **1 device/light** is in **bluetooth range** of your Home Assistant server.
 
