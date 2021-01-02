@@ -174,7 +174,9 @@ class AwoxMeshLight:
         while self.session_key == session_key:
             try:
                 self.btdevice.waitForNotifications(5)
-            except btle.BTLEInternalError as error:
+            except btle.BTLEDisconnectError:
+                self.session_key = None
+            except Exception as error:
                 logger.debug("waitForNotifications error - %s", error)
                 # If we get the response to a write then we'll break
                 pass
@@ -284,7 +286,7 @@ class AwoxMeshLight:
             self.session_key = None
             raise err
         except btle.BTLEInternalError as err:
-            if repr(err) == 'Helper not started (did you call connect()?':
+            if 'Helper not started' in str(err):
                 logger.error('Command failed, Helper not started, device is disconnected: %s', err)
                 self.session_key = None
             else:

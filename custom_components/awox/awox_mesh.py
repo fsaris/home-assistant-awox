@@ -89,6 +89,13 @@ class AwoxMesh(DataUpdateCoordinator):
         await self.async_connect_device()
 
         if not self.is_connected():
+            # Disable all when 2th run is also not successful
+            if not self.last_update_success:
+                for mesh_id, device_info in self._devices.items():
+                    if device_info['last_update'] is not None:
+                        device_info['callback']({'state': None})
+                        device_info['last_update'] = None
+
             raise UpdateFailed("No device connected")
 
         _LOGGER.info('async_update: Request status')
