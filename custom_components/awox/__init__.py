@@ -40,4 +40,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 async def async_unload_entry(hass, entry):
     """Unload a config entry."""
+    if entry.entry_id in hass.data[DOMAIN]:
+        await hass.data[DOMAIN][entry.entry_id].async_shutdown()
     return await hass.config_entries.async_forward_entry_unload(entry, LIGHT_DOMAIN)

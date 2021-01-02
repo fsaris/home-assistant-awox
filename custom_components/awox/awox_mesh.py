@@ -94,7 +94,7 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.info('async_update: Request status')
         try:
             # Request status of all devices (dest 0xffff)
-            async with async_timeout.timeout(5):
+            async with async_timeout.timeout(10):
                 await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, 0xffff)
 
             # Give mesh time to gather status updates
@@ -131,7 +131,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
     @callback
     def mesh_status_callback(self, status):
-
         if 'mesh_id' not in status or status['mesh_id'] not in self._devices:
             _LOGGER.info('Status feedback of unknown device - [%s]',
                          status['mesh_id'] if 'mesh_id' in status else 'unknown')
@@ -233,3 +232,7 @@ class AwoxMesh(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(device.disconnect)
         except Exception as e:
             _LOGGER.debug('Failed to disconnect [%s]', e)
+
+    async def async_shutdown(self):
+        _LOGGER.info('Shutdown mesh')
+        return await self._disconnect_current_device()
