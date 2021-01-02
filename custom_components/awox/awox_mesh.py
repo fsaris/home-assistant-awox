@@ -101,7 +101,7 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.info('async_update: Request status')
         try:
             # Request status of all devices (dest 0xffff)
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(30):
                 await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, 0xffff)
 
             # Give mesh time to gather status updates
@@ -115,7 +115,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 if device_info['last_update'] is None \
                         or device_info['last_update'] < datetime.now() - timedelta(seconds=60):
                     _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
-                    async with async_timeout.timeout(10):
+                    async with async_timeout.timeout(30):
                         await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, mesh_id)
                     # Give mesh time to gather status updates
                     await asyncio.sleep(.5)
