@@ -6,6 +6,7 @@ from os import urandom
 from bluepy import btle
 import logging
 import struct
+import threading
 import time
 
 # Commands :
@@ -111,6 +112,8 @@ class AwoxMeshLight:
         self.btdevice = btle.Peripheral()
         self.session_key = None
         self.command_char = None
+        self.status_char = None
+        self.notificationsTread = None
         self.mesh_name = mesh_name.encode()
         self.mesh_password = mesh_password.encode()
 
@@ -145,13 +148,12 @@ class AwoxMeshLight:
         message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, self.session_random)
         pair_char.write(message)
 
-        status_char = self.btdevice.getCharacteristics(uuid=STATUS_CHAR_UUID)[0]
-        status_char.write(b'\x01')
+        self.status_char = self.btdevice.getCharacteristics(uuid=STATUS_CHAR_UUID)[0]
+        self.status_char.write(b'\x01')
 
         reply = bytearray(pair_char.read())
         if reply[0] == 0xd:
             self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, self.session_random, reply[1:9])
-            return True
         else:
             if reply[0] == 0xe:
                 logger.info("Auth error : check name and password.")
@@ -159,6 +161,24 @@ class AwoxMeshLight:
                 logger.info("Unexpected pair value : %s", repr(reply))
             self.disconnect()
             return False
+
+        self.notificationsTread = threading.Thread(target=self.waitForNotifications)
+        self.notificationsTread.daemon = True
+        self.notificationsTread.start()
+
+        return True
+
+    def waitForNotifications(self):
+        session_key = self.session_key
+        logger.info('[%s] Started waitForNotifications', self.mac)
+        while self.session_key == session_key:
+            try:
+                self.btdevice.waitForNotifications(5)
+            except btle.BTLEInternalError as error:
+                logger.debug("waitForNotifications error - %s", error)
+                # If we get the response to a write then we'll break
+                pass
+        logger.info('[%s] WaitForNotifications done', self.mac)
 
     def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
         """
@@ -258,13 +278,17 @@ class AwoxMeshLight:
 
         try:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
-            self.command_char.write(packet)
+            self.command_char.write(packet, withResponse=True)
         except btle.BTLEDisconnectError as err:
             logger.error('Command failed, device is disconnected: %s', err)
             self.session_key = None
             raise err
         except btle.BTLEInternalError as err:
-            logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
+            if repr(err) == 'Helper not started (did you call connect()?':
+                logger.error('Command failed, Helper not started, device is disconnected: %s', err)
+                self.session_key = None
+            else:
+                logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
 
     def resetMesh(self):
         """
@@ -273,8 +297,7 @@ class AwoxMeshLight:
         self.writeCommand(C_MESH_RESET, b'\x00')
 
     def readStatus(self):
-        status_char = self.btdevice.getCharacteristics(uuid=STATUS_CHAR_UUID)[0]
-        packet = status_char.read()
+        packet = self.status_char.read()
         return pckt.decrypt_packet(self.session_key, self.mac, packet)
 
     def parseStatusResult(self, data):
