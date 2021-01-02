@@ -96,7 +96,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         self._model = model
         self._firmware = firmware
 
-        self._mesh.register_device(mesh_id, mac, self.status_callback)
+        self._mesh.register_device(mesh_id, mac, name, self.status_callback)
 
 
         self._state = None
