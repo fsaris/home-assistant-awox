@@ -162,9 +162,8 @@ class AwoxMeshLight:
             self.disconnect()
             return False
 
-        self.notificationsTread = threading.Thread(target=self.waitForNotifications)
-        self.notificationsTread.daemon = True
-        self.notificationsTread.start()
+        # self.notificationsTread = threading.Thread(target=self.waitForNotifications)
+        # self.notificationsTread.daemon = True
 
         return True
 
@@ -263,7 +262,7 @@ class AwoxMeshLight:
         self.writeCommand(C_MESH_ADDRESS, data)
         self.mesh_id = mesh_id
 
-    def writeCommand(self, command, data, dest=None):
+    def writeCommand(self, command, data, dest=None, withResponse=True):
         """
         Args:
             command: The command, as a number.
@@ -280,7 +279,7 @@ class AwoxMeshLight:
 
         try:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
-            self.command_char.write(packet, withResponse=True)
+            self.command_char.write(packet, withResponse=withResponse)
         except btle.BTLEDisconnectError as err:
             logger.error('Command failed, device is disconnected: %s', err)
             self.session_key = None
@@ -360,9 +359,9 @@ class AwoxMeshLight:
         if status and self.status_callback:
             self.status_callback(status)
 
-    def requestStatus(self, dest=None):
+    def requestStatus(self, dest=None, withResponse=False):
         data = struct.pack('B', 16)
-        self.writeCommand(C_GET_STATUS_SENT, data, dest)
+        self.writeCommand(C_GET_STATUS_SENT, data, dest, withResponse)
 
     def setColor(self, red, green, blue, dest=None):
         """
