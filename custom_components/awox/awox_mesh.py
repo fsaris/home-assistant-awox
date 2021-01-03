@@ -101,7 +101,7 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.info('async_update: Request status')
         try:
             # Request status of all devices (dest 0xffff)
-            async with async_timeout.timeout(30):
+            async with async_timeout.timeout(10):
                 await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, 0xffff)
 
             # Give mesh time to gather status updates
@@ -115,7 +115,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 if device_info['last_update'] is None \
                         or device_info['last_update'] < datetime.now() - timedelta(seconds=60):
                     _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
-                    async with async_timeout.timeout(30):
+                    async with async_timeout.timeout(10):
                         await self.hass.async_add_executor_job(self._connected_bluetooth_device.requestStatus, mesh_id)
                     # Give mesh time to gather status updates
                     await asyncio.sleep(.5)
@@ -127,13 +127,21 @@ class AwoxMesh(DataUpdateCoordinator):
                     device_info['callback']({'state': None})
                     device_info['last_update'] = None
 
+            _LOGGER.info('async_update: Read status updates')
+            async with async_timeout.timeout(10):
+                await self.hass.async_add_executor_job(self._connected_bluetooth_device.readStatus)
+            _LOGGER.info('async_update: Read status done')
+
         except asyncio.exceptions.TimeoutError as e:
-            _LOGGER.warning("readStatus timeout [%s] disconnect and retry next run", e)
-            await self._disconnect_current_device()
+            _LOGGER.warning("readStatus timeout [%s] retry next run", e)
+
+            if not self.last_update_success:
+                _LOGGER.info('Disconnect device as last update also timed out')
+                await self._disconnect_current_device()
+
             raise UpdateFailed(f"Timeout from MESH: {e}") from e
         except BTLEException as e:
-            _LOGGER.warning("readStatus failed [%s] disconnect and retry next run", e)
-            await self._disconnect_current_device()
+            _LOGGER.warning("readStatus failed [%s] retry next run", e)
             raise UpdateFailed(f"Invalid response from MESH: {e}") from e
 
     @callback
