@@ -90,7 +90,7 @@ class Delegate(btle.DefaultDelegate):
 
         message = pckt.decrypt_packet(self.light.session_key, self.light.mac, data)
         if message is None:
-            logger.warning("Failed to decrypt package")
+            logger.warning("Failed to decrypt package [key: %s, data: %s]")
             return
 
         logger.debug("Received notification %s", message)

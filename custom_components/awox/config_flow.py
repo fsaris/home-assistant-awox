@@ -152,10 +152,6 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.warning('Skipped device, missing type - %s', device)
                 continue
 
-            if 'tlmesh' not in device['type']:
-                _LOGGER.warning('Skipped device (currently not supported), does not support BLE mesh - %s', device)
-                continue
-
             devices.append({
                 'mesh_id': int(device['address']),
                 'name': device['displayName'],
