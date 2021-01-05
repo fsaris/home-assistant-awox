@@ -20,6 +20,10 @@ from bluepy.btle import BTLEManagementError
 _LOGGER = logging.getLogger(__name__)
 
 
+def create_awox_connect_object(username, password) -> AwoxConnect:
+    return AwoxConnect(username, password)
+
+
 class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a Awox config flow."""
 
@@ -130,7 +134,7 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         if username and password:
             try:
-                awox_connect = AwoxConnect(username, password)
+                awox_connect = await self.hass.async_add_executor_job(create_awox_connect_object, username, password)
             except Exception as e:
                 _LOGGER.error('Can not login to AwoX Smart Connect [%s]', e)
                 errors[CONF_PASSWORD] = 'cannot_connect'
@@ -146,27 +150,45 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         devices = []
-        for device in awox_connect.devices():
+        for device in await self.hass.async_add_executor_job(awox_connect.devices):
             _LOGGER.debug('Processing device - %s', device)
             if 'type' not in device:
                 _LOGGER.warning('Skipped device, missing type - %s', device)
                 continue
+            if 'address' not in device:
+                _LOGGER.warning('Skipped device, missing address - %s', device)
+                continue
+            if 'macAddress' not in device:
+                _LOGGER.warning('Skipped device, missing macAddress - %s', device)
+                continue
+            if 'displayName' not in device:
+                _LOGGER.warning('Skipped device, missing displayName - %s', device)
+                continue
+
+            if 'modelName' not in device:
+                device['modelName'] = 'unknown'
+            if 'vendor' not in device:
+                device['vendor'] = 'unknown'
+            if 'version' not in device:
+                device['version'] = 'unknown'
+            if 'hardwareVersion' not in device:
+                device['hardwareVersion'] = None
 
             devices.append({
                 'mesh_id': int(device['address']),
                 'name': device['displayName'],
                 'mac': device['macAddress'],
-                'model': 'modelName' in device if device['modelName'] else 'unknown',
-                'manufacturer': 'vendor' in device if device['vendor'] else 'unknown',
-                'firmware':  'version' in device if device['version'] else None,
-                'hardware':  'hardwareVersion' in device if device['hardwareVersion'] else None,
+                'model': device['modelName'],
+                'manufacturer': device['vendor'],
+                'firmware': device['version'],
+                'hardware': device['hardwareVersion'],
                 'type': device['type']
             })
 
         if len(devices) == 0:
             return self.async_abort(reason="no_devices_found")
 
-        credentials = awox_connect.credentials()
+        credentials = await self.hass.async_add_executor_job(awox_connect.credentials)
 
         data = {
             CONF_MESH_NAME: credentials['client_id'],
