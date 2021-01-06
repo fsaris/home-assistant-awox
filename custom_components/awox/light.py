@@ -98,7 +98,6 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
         self._mesh.register_device(mesh_id, mac, name, self.status_callback)
 
-
         self._state = None
         self._color_mode = False
         self._red = None
@@ -122,10 +121,16 @@ class AwoxLight(CoordinatorEntity, LightEntity):
                 "identifiers": {(DOMAIN, self.unique_id)},
                 "name": self.name,
                 "manufacturer": self._manufacturer,
-                "model": self._model,
+                "model": self._model.replace('_', ' '),
                 "sw_version": self._firmware,
             }
         )
+
+    @property
+    def icon(self) -> Optional[str]:
+        if 'Spot' in self._model:
+            return 'mdi:wall-sconce-flat'
+        return None
 
     @property
     def available(self) -> bool:
