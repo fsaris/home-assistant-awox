@@ -77,7 +77,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         lights.append(light)
 
     async_add_entities(lights)
-    await mesh.async_refresh()
 
 
 class AwoxLight(CoordinatorEntity, LightEntity):
