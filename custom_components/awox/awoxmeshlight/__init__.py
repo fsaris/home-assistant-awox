@@ -6,7 +6,6 @@ from os import urandom
 from bluepy import btle
 import logging
 import struct
-import threading
 import time
 
 # Commands :
@@ -75,6 +74,114 @@ OTA_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1913'
 logger = logging.getLogger(__name__)
 
 
+class Peripheral(btle.Peripheral):
+
+    def _connect(self, addr, addrType=btle.ADDR_TYPE_PUBLIC, iface=None, timeout=5):
+        """
+        Temporary manual patch see https://github.com/IanHarvey/bluepy/pull/434
+        also added a default `timeout` as this is not part yet of the release bluepy package
+        """
+        if len(addr.split(":")) != 6:
+            raise ValueError("Expected MAC address, got %s" % repr(addr))
+        if addrType not in (btle.ADDR_TYPE_PUBLIC, btle.ADDR_TYPE_RANDOM):
+            raise ValueError("Expected address type public or random, got {}".format(addrType))
+        self._startHelper(iface)
+        self.addr = addr
+        self.addrType = addrType
+        self.iface = iface
+        if iface is not None:
+            self._writeCmd("conn %s %s %s\n" % (addr, addrType, "hci"+str(iface)))
+        else:
+            self._writeCmd("conn %s %s\n" % (addr, addrType))
+        rsp = self._getResp('stat', timeout)
+        if rsp is None:
+            self._stopHelper()
+            raise btle.BTLEDisconnectError("Timed out while trying to connect to peripheral %s, addr type: %s" %
+                                      (addr, addrType), rsp)
+        while rsp and rsp['state'][0] == 'tryconn':
+            rsp = self._getResp('stat', timeout)
+
+        if rsp is None:
+            self._stopHelper()
+            raise btle.BTLEDisconnectError("Timed out while trying to connect to peripheral %s, addr type: %s" %
+                                      (addr, addrType), rsp)
+
+        if rsp['state'][0] != 'conn':
+            self._stopHelper()
+            raise btle.BTLEDisconnectError("Failed to connect to peripheral %s, addr type: %s [%s]" % (addr, addrType, rsp), rsp)
+
+    def _getResp(self, wantType, timeout=None):
+        """
+        Temporary manual patch see https://github.com/IanHarvey/bluepy/commit/b02b436cb5c71387bd70339a1b472b3a6bfe9ac8
+        """
+        # Temp set max timeout for wr commands (failsave)
+        if timeout is None and wantType == 'wr':
+            logger.debug('Set fallback time out - %s', wantType)
+            timeout = 5
+
+        if isinstance(wantType, list) is not True:
+            wantType = [wantType]
+
+        while True:
+            resp = self._waitResp(wantType + ['ntfy', 'ind'], timeout)
+            if resp is None:
+                return None
+
+            respType = resp['rsp'][0]
+            if respType == 'ntfy' or respType == 'ind':
+                hnd = resp['hnd'][0]
+                data = resp['d'][0]
+                if self.delegate is not None:
+                    self.delegate.handleNotification(hnd, data)
+            if respType not in wantType:
+                continue
+            return resp
+
+    def _waitResp(self, wantType, timeout=None):
+        while True:
+            logger.debug("_waitResp")
+            if self._helper.poll() is not None:
+                raise btle.BTLEInternalError("Helper exited")
+
+            if timeout:
+                logger.debug("_waitResp - set timeout to %d", timeout)
+                fds = self._poller.poll(timeout*1000)
+                if len(fds) == 0:
+                    logger.debug("Select timeout")
+                    return None
+            logger.debug("_waitResp - readline")
+            rv = self._helper.stdout.readline()
+            logger.debug("_waitResp - got: %s", repr(rv))
+            if rv.startswith('#') or rv == '\n' or len(rv)==0:
+                continue
+
+            resp = btle.BluepyHelper.parseResp(rv)
+            if 'rsp' not in resp:
+                raise btle.BTLEInternalError("No response type indicator", resp)
+
+            respType = resp['rsp'][0]
+            if respType in wantType:
+                logger.debug("_waitResp - resp [%s]", resp)
+                return resp
+            elif respType == 'stat':
+                if 'state' in resp and len(resp['state']) > 0 and resp['state'][0] == 'disc':
+                    self._stopHelper()
+                    raise btle.BTLEDisconnectError("Device disconnected", resp)
+            elif respType == 'err':
+                errcode=resp['code'][0]
+                if errcode=='nomgmt':
+                    raise btle.BTLEManagementError("Management not available (permissions problem?)", resp)
+                elif errcode=='atterr':
+                    raise btle.BTLEGattError("Bluetooth command failed", resp)
+                else:
+                    raise btle.BTLEException("Error from bluepy-helper (%s)" % errcode, resp)
+            elif respType == 'scan':
+                # Scan response when we weren't interested. Ignore it
+                continue
+            else:
+                raise btle.BTLEInternalError("Unexpected response (%s)" % respType, resp)
+
+
 class Delegate(btle.DefaultDelegate):
     def __init__(self, light):
         self.light = light
@@ -90,7 +197,7 @@ class Delegate(btle.DefaultDelegate):
 
         message = pckt.decrypt_packet(self.light.session_key, self.light.mac, data)
         if message is None:
-            logger.warning("Failed to decrypt package [key: %s, data: %s]")
+            logger.warning("Failed to decrypt package [key: %s, data: %s]", self.light.session_key, data)
             return
 
         logger.debug("Received notification %s", message)
@@ -109,11 +216,12 @@ class AwoxMeshLight:
         """
         self.mac = mac
         self.mesh_id = mesh_id
-        self.btdevice = btle.Peripheral()
+        self.btdevice = Peripheral()
         self.session_key = None
+
         self.command_char = None
         self.status_char = None
-        self.notificationsTread = None
+
         self.mesh_name = mesh_name.encode()
         self.mesh_password = mesh_password.encode()
 
@@ -161,9 +269,6 @@ class AwoxMeshLight:
                 logger.info("Unexpected pair value : %s", repr(reply))
             self.disconnect()
             return False
-
-        # self.notificationsTread = threading.Thread(target=self.waitForNotifications)
-        # self.notificationsTread.daemon = True
 
         return True
 
@@ -274,12 +379,12 @@ class AwoxMeshLight:
         if dest == None: dest = self.mesh_id
         packet = pckt.make_command_packet(self.session_key, self.mac, dest, command, data)
 
-        if not self.command_char:
-            self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
-
         try:
+            if not self.command_char:
+                self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
+
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
-            self.command_char.write(packet, withResponse=withResponse)
+            return self.command_char.write(packet, withResponse=withResponse)
         except btle.BTLEDisconnectError as err:
             logger.error('Command failed, device is disconnected: %s', err)
             self.session_key = None
@@ -295,7 +400,7 @@ class AwoxMeshLight:
         """
         Restores the default name and password. Will disconnect the device.
         """
-        self.writeCommand(C_MESH_RESET, b'\x00')
+        return self.writeCommand(C_MESH_RESET, b'\x00')
 
     def readStatus(self):
         packet = self.status_char.read()
@@ -360,8 +465,9 @@ class AwoxMeshLight:
             self.status_callback(status)
 
     def requestStatus(self, dest=None, withResponse=False):
+        logger.debug('requestStatus(%s)', dest)
         data = struct.pack('B', 16)
-        self.writeCommand(C_GET_STATUS_SENT, data, dest, withResponse)
+        return self.writeCommand(C_GET_STATUS_SENT, data, dest, withResponse)
 
     def setColor(self, red, green, blue, dest=None):
         """
@@ -369,7 +475,7 @@ class AwoxMeshLight:
             red, green, blue: between 0 and 0xff
         """
         data = struct.pack('BBBB', 0x04, red, green, blue)
-        self.writeCommand(C_COLOR, data, dest)
+        return self.writeCommand(C_COLOR, data, dest)
 
     def setColorBrightness(self, brightness, dest=None):
         """
@@ -377,7 +483,7 @@ class AwoxMeshLight:
             brightness: a value between 0xa and 0x64 ...
         """
         data = struct.pack('B', brightness)
-        self.writeCommand(C_COLOR_BRIGHTNESS, data, dest)
+        return self.writeCommand(C_COLOR_BRIGHTNESS, data, dest)
 
     def setSequenceColorDuration(self, duration, dest=None):
         """
@@ -385,7 +491,7 @@ class AwoxMeshLight:
             duration: in milliseconds.
         """
         data = struct.pack("<I", duration)
-        self.writeCommand(C_SEQUENCE_COLOR_DURATION, data, dest)
+        return self.writeCommand(C_SEQUENCE_COLOR_DURATION, data, dest)
 
     def setSequenceFadeDuration(self, duration, dest=None):
         """
@@ -393,7 +499,7 @@ class AwoxMeshLight:
             duration: in milliseconds.
         """
         data = struct.pack("<I", duration)
-        self.writeCommand(C_SEQUENCE_FADE_DURATION, data, dest)
+        return self.writeCommand(C_SEQUENCE_FADE_DURATION, data, dest)
 
     def setPreset(self, num, dest=None):
         """
@@ -403,7 +509,7 @@ class AwoxMeshLight:
             num: number between 0 and 6
         """
         data = struct.pack('B', num)
-        self.writeCommand(C_PRESET, data, dest)
+        return self.writeCommand(C_PRESET, data, dest)
 
     def setWhiteBrightness(self, brightness, dest=None):
         """
@@ -411,15 +517,15 @@ class AwoxMeshLight:
             brightness: between 1 and 0x7f
         """
         data = struct.pack('B', brightness)
-        self.writeCommand(C_WHITE_BRIGHTNESS, data, dest)
+        return self.writeCommand(C_WHITE_BRIGHTNESS, data, dest)
 
-    def setWhiteTemperature(self, brightness, dest=None):
+    def setWhiteTemperature(self, temp, dest=None):
         """
         Args :
             temp: between 0 and 0x7f
         """
-        data = struct.pack('B', brightness)
-        self.writeCommand(C_WHITE_TEMPERATURE, data, dest)
+        data = struct.pack('B', temp)
+        return self.writeCommand(C_WHITE_TEMPERATURE, data, dest)
 
     def setWhite(self, temp, brightness, dest=None):
         """
@@ -430,17 +536,17 @@ class AwoxMeshLight:
         data = struct.pack('B', temp)
         self.writeCommand(C_WHITE_TEMPERATURE, data, dest)
         data = struct.pack('B', brightness)
-        self.writeCommand(C_WHITE_BRIGHTNESS, data, dest)
+        return self.writeCommand(C_WHITE_BRIGHTNESS, data, dest)
 
     def on(self, dest=None):
         """ Turns the light on.
         """
-        self.writeCommand(C_POWER, b'\x01', dest)
+        return self.writeCommand(C_POWER, b'\x01', dest)
 
     def off(self, dest=None):
         """ Turns the light off.
         """
-        self.writeCommand(C_POWER, b'\x00', dest)
+        return self.writeCommand(C_POWER, b'\x00', dest)
 
     def reconnect(self):
         logger.debug("Reconnecting.")
