@@ -108,7 +108,7 @@ class Peripheral(btle.Peripheral):
 
         if rsp['state'][0] != 'conn':
             self._stopHelper()
-            raise btle.BTLEDisconnectError("Failed to connect to peripheral %s, addr type: %s" % (addr, addrType), rsp)
+            raise btle.BTLEDisconnectError("Failed to connect to peripheral %s, addr type: %s [%s]" % (addr, addrType, rsp), rsp)
 
     def _getResp(self, wantType, timeout=None):
         """
