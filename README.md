@@ -16,6 +16,7 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
   - LED strip 5m (HW v4.3)
   - `ECeil_G60` (HW v4.0)
   - `EPanel_120` (HW v4.0)
+  - `EPanel_600`
 - Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`
 
 ## Current features
