@@ -1,6 +1,7 @@
 """AwoX Mesh handler"""
 import logging
 import asyncio
+import async_timeout
 import queue
 import threading
 import time
@@ -46,10 +47,10 @@ class AwoxMesh(DataUpdateCoordinator):
         self._command_tread = threading.Thread(target=self._process_command_queue, name="AwoxMeshCommands-" + self._mesh_name)
         self._command_tread.daemon = True
         self._last_response: datetime = None
+        self._command_tread.start()
 
         def startup(event):
             _LOGGER.debug('startup')
-            self._command_tread.start()
             asyncio.run_coroutine_threadsafe(
                 self.async_refresh(), hass.loop
             ).result()
@@ -161,7 +162,9 @@ class AwoxMesh(DataUpdateCoordinator):
             self._connected_bluetooth_device = None
             await self.hass.async_add_executor_job(device.disconnect)
         except Exception as e:
-            _LOGGER.debug('Failed to disconnect [%s]', e)
+            _LOGGER.exception('Failed to disconnect [%s]', e)
+
+        self.hass.states.async_set("awox_mesh." + self._mesh_name, "disconnected")
 
     async def async_shutdown(self):
         _LOGGER.info('Shutdown mesh')
@@ -204,7 +207,9 @@ class AwoxMesh(DataUpdateCoordinator):
             self._queue.task_done()
 
     def _call_command(self, command) -> bool:
-        self._connect_device()
+        asyncio.run_coroutine_threadsafe(
+            self._async_connect_device(), self.hass.loop
+        ).result()
         if not self.is_connected():
             return False
 
@@ -220,6 +225,7 @@ class AwoxMesh(DataUpdateCoordinator):
             self.update_status_of_all_devices_to_disabled()
             device = self._connected_bluetooth_device
             self._connected_bluetooth_device = None
+            self.hass.states.set("awox_mesh." + self._mesh_name, "disconnected")
             device.disconnect()
             return False
 
@@ -231,7 +237,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
         return True
 
-    def _connect_device(self):
+    async def _async_connect_device(self):
         if self.is_connected():
             return
 
@@ -240,16 +246,19 @@ class AwoxMesh(DataUpdateCoordinator):
                 continue
 
             device = AwoxMeshLight(device_info['mac'], self._mesh_name, self._mesh_password, mesh_id)
-            device.status_callback = self.mesh_status_callback
-
             try:
                 _LOGGER.info("[%s][%s] Trying to connect", device.mac, device_info['name'])
-                if device.connect():
-                    self._connected_bluetooth_device = device
-                    _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
-                    break
-                else:
-                    _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
+                async with async_timeout.timeout(10):
+                    if await self.hass.async_add_executor_job(device.connect):
+                        self._connected_bluetooth_device = device
+                        self.hass.states.async_set("awox_mesh." + self._mesh_name, "connected", {'mesh': device_info["name"]})
+                        _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
+                        break
+                    else:
+                        _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
             except Exception as e:
                 _LOGGER.exception('[%s][%s] Failed to connect, trying next device [%s]',
                                 device.mac, device_info['name'], e)
+
+        if self._connected_bluetooth_device is not None:
+            self._connected_bluetooth_device.status_callback = self.mesh_status_callback

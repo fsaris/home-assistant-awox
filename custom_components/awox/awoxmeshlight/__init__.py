@@ -117,7 +117,7 @@ class Peripheral(btle.Peripheral):
         # Temp set max timeout for wr commands (failsave)
         if timeout is None and wantType == 'wr':
             logger.debug('Set fallback time out - %s', wantType)
-            timeout = 5
+            timeout = 10
 
         if isinstance(wantType, list) is not True:
             wantType = [wantType]
