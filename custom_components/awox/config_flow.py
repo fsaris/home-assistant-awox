@@ -73,7 +73,8 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         # Scan for devices
         scan_successful = False
         try:
-            discoveries = await DeviceScanner.find_devices(
+            discoveries = await DeviceScanner.async_find_available_devices(
+                self.hass,
                 self._mesh_info.get(CONF_MESH_NAME),
                 self._mesh_info.get(CONF_MESH_PASSWORD)
             )

@@ -1,15 +1,17 @@
 """Awox device scanner class"""
-import pygatt
+import asyncio
 import logging
 
-
+from homeassistant.core import HomeAssistant
 from .awoxmeshlight import AwoxMeshLight
 # import awoxmeshlight from .awoxmeshlight
+from .bluetoothctl import Bluetoothctl
 
 
 _LOGGER = logging.getLogger(__name__)
 
 START_MAC_ADDRESS = "A4:C1"
+
 
 class DeviceScanner:
 
@@ -27,34 +29,52 @@ class DeviceScanner:
         return False
 
     @staticmethod
-    async def find_devices(username: str, password: str):
-        """Gather a list of device infos from the local network."""
+    async def async_find_devices(hass: HomeAssistant):
+        def init():
+            return Bluetoothctl()
+        devices = {}
+
+        try:
+            bl = await hass.async_add_executor_job(init)
+            _LOGGER.info("Scanning 30 seconds for AwoX bluetooth mesh devices!")
+            await hass.async_add_executor_job(bl.start_scan)
+            await asyncio.sleep(30)
+
+            for mac, dev in (await hass.async_add_executor_job(bl.get_available_devices)).items():
+                if mac.startswith(START_MAC_ADDRESS):
+                    devices[mac] = dev
+
+            await hass.async_add_executor_job(bl.stop_scan)
+            await hass.async_add_executor_job(bl.shutdown)
+
+        except Exception as e:
+            _LOGGER.exception('Failed: %s', e)
+            pass
+
+        return devices
+
+    @staticmethod
+    async def async_find_available_devices(hass: HomeAssistant, username: str, password: str):
+        """Gather a list of device"""
 
         result = []
-        adapter = pygatt.GATTToolBackend()
-        devices = adapter.scan()
 
-        _LOGGER.debug("Found %d devices" % (len(devices)))
+        devices = await DeviceScanner.async_find_devices(hass)
 
-        for dev in devices:
-            if not dev.address.startswith(START_MAC_ADDRESS):
-                _LOGGER.debug("Skipped device %s [%s] the MAC address of this device does not start with valid sequence"
-                              % (dev.name, dev.address))
-                continue
+        _LOGGER.debug("Found %d AwoX devices" % (len(devices)))
 
-            _LOGGER.debug("Device %s [%s]" % (dev.name, dev.address))
-
+        for mac, dev in devices.items():
+            _LOGGER.debug("Device %s [%s]" % (dev['name'], dev['mac']))
             try:
-                mylight = DeviceScanner._connect(dev.address, username, password)
-                #
+                mylight = DeviceScanner._connect(dev['mac'], username, password)
                 if mylight.session_key:
                     result.append({
-                        'mac': dev.address,
+                        'mac': dev['mac'],
                         'name': mylight.getModelNumber()
                     })
                     mylight.disconnect()
             except:
-                _LOGGER.debug('Failed to connect [%s]' % dev.address)
+                _LOGGER.debug('Failed to connect [%s]' % dev['mac'])
 
     @staticmethod
     def _connect(address, username: str, password: str, mesh_key: str = None) -> AwoxMeshLight:

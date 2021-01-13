@@ -139,7 +139,6 @@ class Peripheral(btle.Peripheral):
 
     def _waitResp(self, wantType, timeout=None):
         while True:
-            logger.debug("_waitResp")
             if self._helper.poll() is not None:
                 raise btle.BTLEInternalError("Helper exited")
 
@@ -149,9 +148,8 @@ class Peripheral(btle.Peripheral):
                 if len(fds) == 0:
                     logger.debug("Select timeout")
                     return None
-            logger.debug("_waitResp - readline")
+
             rv = self._helper.stdout.readline()
-            logger.debug("_waitResp - got: %s", repr(rv))
             if rv.startswith('#') or rv == '\n' or len(rv)==0:
                 continue
 
