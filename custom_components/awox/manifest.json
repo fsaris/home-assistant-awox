@@ -6,7 +6,8 @@
   "dependencies": [],
   "codeowners": ["@fsaris"],
   "requirements": [
-    "bluepy"
+    "bluepy",
+    "pexpect"
   ],
   "config_flow": true
 }
