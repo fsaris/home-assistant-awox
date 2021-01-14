@@ -446,6 +446,8 @@ class AwoxMeshLight:
 
         if status:
             logger.debug('parsed status %s', status)
+        else:
+            logger.info('Unknown command [%d]', command)
 
         if status and status['mesh_id'] == self.mesh_id:
             logger.info('Update light status - mesh_id %d', status['mesh_id'])
