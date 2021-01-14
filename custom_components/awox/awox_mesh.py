@@ -115,7 +115,7 @@ class AwoxMesh(DataUpdateCoordinator):
                     or device_info['last_update'] < datetime.now() - timedelta(seconds=60):
                 _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
 
-                await self._async_add_command_to_queue('requestStatus', {'dest': mesh_id, 'withResponse': True})
+                await self._async_add_command_to_queue('requestStatus', {'dest': mesh_id, 'withResponse': True}, True)
 
                 # Give mesh time to gather status updates
                 await asyncio.sleep(.5)
@@ -188,7 +188,7 @@ class AwoxMesh(DataUpdateCoordinator):
         self._shutdown = True
         return await self._disconnect_current_device()
 
-    async def _async_add_command_to_queue(self, command: str, params):
+    async def _async_add_command_to_queue(self, command: str, params, allow_to_fail: bool = False):
         done = False
 
         def command_executed():
@@ -198,7 +198,8 @@ class AwoxMesh(DataUpdateCoordinator):
         self._queue.put({
             'command': command,
             'params': params,
-            'callback': command_executed
+            'callback': command_executed,
+            'allow_to_fail': allow_to_fail
         })
         while not done:
             await asyncio.sleep(.01)
@@ -237,7 +238,9 @@ class AwoxMesh(DataUpdateCoordinator):
         else:
             res = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
 
-        if res is None:
+        _LOGGER.debug('Command result: %s', res)
+
+        if res is None and not command['allow_to_fail']:
             _LOGGER.error('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
             self.update_status_of_all_devices_to_disabled()
             device = self._connected_bluetooth_device
@@ -246,7 +249,7 @@ class AwoxMesh(DataUpdateCoordinator):
             device.disconnect()
             return False
 
-        if self._last_response is not None and self._last_response < now:
+        if not command['allow_to_fail'] and self._last_response is not None and self._last_response < now:
             _LOGGER.warning('No response received after command! - start: %s, now: %s, last response: %s', now,
                             datetime.now(), self._last_response)
 
@@ -273,7 +276,7 @@ class AwoxMesh(DataUpdateCoordinator):
                     else:
                         _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
             except Exception as e:
-                _LOGGER.exception('[%s][%s] Failed to connect, trying next device [%s]',
+                _LOGGER.info('[%s][%s] Failed to connect, trying next device [%s]',
                                   device.mac, device_info['name'], e)
 
         if self._connected_bluetooth_device is not None:
