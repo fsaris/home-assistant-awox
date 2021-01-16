@@ -17,6 +17,7 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
   - `ECeil_G60` (HW v4.0)
   - `EPanel_120` (HW v4.0)
   - `EPanel_600` (HW v4.0)
+  - Eglo Fueva-C RGB CCT
 - Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`
 
 ## Current features
