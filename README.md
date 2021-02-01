@@ -9,8 +9,12 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 
 > Work is based on the [python-awox-mesh-light](https://github.com/Leiaz/python-awox-mesh-light) Python package created by @leiaz to control AwoX mesh lights bulbs.
 
-## Current BETA state
-- Tested with following lights:
+## Supported devices
+- Bluethoot devices that use the `ble.tlmesh` protocol  
+  _(when adding your devices check the logs and check for the `type` of your device, when it starts with `.ble.tlmesh.light*` it probably supported)_  
+    
+  **Tested with following lights:**  
+  _(Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`)_
   - Eglo (120) RGBW spots (`ESpot_120` HW v4.3)
   - LED strip 3m (HW v4.0 and v4.3)
   - LED strip 5m (HW v4.3)
@@ -18,7 +22,8 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
   - `EPanel_120` (HW v4.0)
   - `EPanel_600` (HW v4.0)
   - Eglo Fueva-C RGB CCT
-- Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`
+- `.ble.zigbee.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/2
+- `.wifi.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/17
 
 ## Current features
 - Supports RGBW mesh lights
@@ -69,10 +74,11 @@ Do you have [HACS](https://hacs.xyz/) installed?
 
 
 ## Todo
-- [ ] Improve stability of mesh connection  
+- [x] Improve stability of mesh connection
+- [ ] Add option to refetch/update devices from **AwoX Smart Control** account
 - [ ] Finish support adding lights without **AwoX Smart Control** account _(full local support)_
 - [ ] Add **non** mesh light support _(not sure is there is a request for this)_
-- [ ] Add support for non light devices (plugs, remotes, etc)
+- [ ] Add support for `ble.zigbee` devices _(if possible)_
 
 
 ## Troubleshooting
