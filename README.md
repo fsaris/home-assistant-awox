@@ -22,6 +22,8 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
   - `EPanel_120` (HW v4.0)
   - `EPanel_600` (HW v4.0)
   - Eglo Fueva-C RGB CCT
+  - Eglo Crossling RGBW Spot (`ETriSpot 85` HW 4.31, firmware 2.2.6)
+  - Eglo Crossling RGBW Spot (`ESpot 170` HW 4.30, firmware 2.2.6)
 - `.ble.zigbee.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/2
 - `.wifi.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/17
 
