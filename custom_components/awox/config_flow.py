@@ -156,7 +156,7 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             if 'type' not in device:
                 _LOGGER.warning('Skipped device, missing type - %s', device)
                 continue
-            if 'address' not in device:
+            if 'address' not in device or not device['address']:
                 _LOGGER.warning('Skipped device, missing address - %s', device)
                 continue
             if 'macAddress' not in device:
