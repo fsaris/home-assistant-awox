@@ -1,6 +1,7 @@
 {
   "domain": "awox",
   "name": "AwoX MESH control",
+  "version": "0.0.2",
   "documentation": "https://github.com/fsaris/home-assistant-awox",
   "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
   "dependencies": [],
