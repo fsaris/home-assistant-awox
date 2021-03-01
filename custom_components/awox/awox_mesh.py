@@ -54,7 +54,6 @@ class AwoxMesh(DataUpdateCoordinator):
         self._command_tread = threading.Thread(target=self._process_command_queue,
                                                name="AwoxMeshCommands-" + self._mesh_name)
         self._command_tread.daemon = True
-        self._last_response: datetime = None
         self._command_tread.start()
 
         def startup(event):
@@ -140,8 +139,6 @@ class AwoxMesh(DataUpdateCoordinator):
 
     @callback
     def mesh_status_callback(self, status):
-        self._last_response = datetime.now()
-
         if 'mesh_id' not in status or status['mesh_id'] not in self._devices:
             _LOGGER.info('Status feedback of unknown device - [%s]',
                          status['mesh_id'] if 'mesh_id' in status else 'unknown')
@@ -231,7 +228,6 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             return False
 
-        now = datetime.now()
         # Call command
         if isinstance(command['params'], tuple):
             res = getattr(self._connected_bluetooth_device, command['command'])(*command['params'])
@@ -241,17 +237,12 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.debug('Command result: %s', res)
 
         if res is None and not command['allow_to_fail']:
-            _LOGGER.error('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
-            self.update_status_of_all_devices_to_disabled()
+            _LOGGER.info('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
             device = self._connected_bluetooth_device
             self._connected_bluetooth_device = None
             self.hass.states.set("awox_mesh." + self._mesh_name, "disconnected")
             device.disconnect()
             return False
-
-        if not command['allow_to_fail'] and self._last_response is not None and self._last_response < now:
-            _LOGGER.warning('No response received after command! - start: %s, now: %s, last response: %s', now,
-                            datetime.now(), self._last_response)
 
         return True
 
