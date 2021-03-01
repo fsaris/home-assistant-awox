@@ -237,7 +237,6 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.debug('Command result: %s', res)
 
         if res is None and not command['allow_to_fail']:
-            self.update_status_of_all_devices_to_disabled()
             _LOGGER.info('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
             device = self._connected_bluetooth_device
             self._connected_bluetooth_device = None
