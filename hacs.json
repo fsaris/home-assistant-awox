@@ -1,5 +1,5 @@
 {
-  "name": "AwoX MESH control - BETA",
+  "name": "AwoX MESH control",
   "domains": ["light"],
   "homeassistant": "2020.12.0",
   "render_readme": true,
