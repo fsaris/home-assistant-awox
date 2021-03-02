@@ -1,7 +1,7 @@
-# BETA - AwoX MESH control component for Home Assistant
+# AwoX MESH control component for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz/)
-![stability-wip](https://img.shields.io/badge/stability-beta-red.svg?style=for-the-badge&color=red)
+![stability-wip](https://img.shields.io/badge/stability-stable-green.svg?style=for-the-badge&color=green)
 
 ![AwoX Smart Control](https://github.com/fsaris/home-assistant-awox/blob/main/images/icon.png?raw=true)
 
