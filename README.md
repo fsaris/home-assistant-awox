@@ -28,7 +28,7 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 - `.wifi.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/17
 
 ## Current features
-- Supports RGBW mesh lights
+- Supports RGBW mesh **lights**
 - Uses the AwoX app credentials to access the AwoX server to download light info during initial setup
 
 ## Installation
@@ -79,6 +79,7 @@ Do you have [HACS](https://hacs.xyz/) installed?
 - [x] Improve stability of mesh connection
 - [ ] Add option to refetch/update devices from **AwoX Smart Control** account
 - [ ] Finish support adding lights without **AwoX Smart Control** account _(full local support)_
+- [ ] Add support for `plugs` and other devices _(currently do not own such a device, maybe you can sponser me one so I can try to add support for it)_
 - [ ] Add **non** mesh light support _(not sure is there is a request for this)_
 - [ ] Add support for `ble.zigbee` devices _(if possible)_
 
