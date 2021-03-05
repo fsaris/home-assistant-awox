@@ -1,0 +1,53 @@
+{
+  "title": "AwoX Mesh Beleuchtung",
+  "config": {
+    "step": {
+      "confirm": {
+        "description": "[%key:common::config_flow::description::confirm_setup%]"
+      },
+      "mesh_info": {
+        "title": "AwoX Mesh Zugangsdaten",
+        "description": "Gib die entsprechenden Zugangsdaten ein, um dich zu verbinden",
+        "data": {
+          "mesh_name": "Mesh-Benutzername",
+          "mesh_password": "Mesh-Passwort",
+          "mesh_key": "Mesh-Langzeitschlüssel (Key)"
+        }
+      },
+      "manual": {
+        "title": "MAC-Adresse hinzufügen",
+        "description": "Suche fehlgeschlagen, bitte sieh dir die Dokumentation an und gib die Geräteadresse ein",
+        "data": {
+          "mac": "MAC-Adresse des AwoX Lichts",
+          "name": "Gerätebezeichnung"
+        }
+      },
+      "awox_connect": {
+        "title": "Mit AwoX Connect verbinden",
+        "description": "Gib die Zugangsdaten ein, die du auch in der AwoX Smart Control App verwendest",
+        "data": {
+          "username": "Benutzername (E-Mail-Adresse)",
+          "password": "Passwort"
+        }
+      },
+      "select_device": {
+        "title": "MAC-Adresse auswählen",
+        "description": "",
+        "data": {
+          "mac": "MAC-Adresse des AwoX Lichts",
+          "name": "Gerätebezeichnung"
+        }
+      }
+    },
+    "error": {
+      "scanning_failed": "Suche nach Geräten fehlgeschlagen",
+      "max_length_16": "Maximal 16 Zeichen",
+      "cannot_connect": "Verbindung oder Anmeldung nicht möglich (siehe Log)"
+    },
+    "abort": {
+      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
+      "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]",
+      "device_not_found": "Verbindung zu Gerät nicht möglich"
+    }
+  }
+}
