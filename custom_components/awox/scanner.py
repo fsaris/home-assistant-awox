@@ -4,6 +4,7 @@ import logging
 
 from homeassistant.core import HomeAssistant
 from .awoxmeshlight import AwoxMeshLight
+
 # import awoxmeshlight from .awoxmeshlight
 from .bluetoothctl import Bluetoothctl
 
@@ -14,9 +15,10 @@ START_MAC_ADDRESS = "A4:C1"
 
 
 class DeviceScanner:
-
     @staticmethod
-    async def connect_device(address: str, username: str, password: str, mesh_key: str) -> bool:
+    async def connect_device(
+        address: str, username: str, password: str, mesh_key: str
+    ) -> bool:
         """Check if device is available"""
 
         light = DeviceScanner._connect(address, username, password, mesh_key)
@@ -32,6 +34,7 @@ class DeviceScanner:
     async def async_find_devices(hass: HomeAssistant):
         def init():
             return Bluetoothctl()
+
         devices = {}
 
         try:
@@ -40,7 +43,9 @@ class DeviceScanner:
             await hass.async_add_executor_job(bl.start_scan)
             await asyncio.sleep(30)
 
-            for mac, dev in (await hass.async_add_executor_job(bl.get_available_devices)).items():
+            for mac, dev in (
+                await hass.async_add_executor_job(bl.get_available_devices)
+            ).items():
                 if mac.startswith(START_MAC_ADDRESS):
                     devices[mac] = dev
 
@@ -48,13 +53,15 @@ class DeviceScanner:
             await hass.async_add_executor_job(bl.shutdown)
 
         except Exception as e:
-            _LOGGER.exception('Failed: %s', e)
+            _LOGGER.exception("Failed: %s", e)
             pass
 
         return devices
 
     @staticmethod
-    async def async_find_available_devices(hass: HomeAssistant, username: str, password: str):
+    async def async_find_available_devices(
+        hass: HomeAssistant, username: str, password: str
+    ):
         """Gather a list of device"""
 
         result = []
@@ -64,20 +71,21 @@ class DeviceScanner:
         _LOGGER.debug("Found %d AwoX devices" % (len(devices)))
 
         for mac, dev in devices.items():
-            _LOGGER.debug("Device %s [%s]" % (dev['name'], dev['mac']))
+            _LOGGER.debug("Device %s [%s]" % (dev["name"], dev["mac"]))
             try:
-                mylight = DeviceScanner._connect(dev['mac'], username, password)
+                mylight = DeviceScanner._connect(dev["mac"], username, password)
                 if mylight.session_key:
-                    result.append({
-                        'mac': dev['mac'],
-                        'name': mylight.getModelNumber()
-                    })
+                    result.append({"mac": dev["mac"], "name": mylight.getModelNumber()})
                     mylight.disconnect()
             except:
-                _LOGGER.debug('Failed to connect [%s]' % dev['mac'])
+                _LOGGER.debug("Failed to connect [%s]" % dev["mac"])
+
+        return result
 
     @staticmethod
-    def _connect(address, username: str, password: str, mesh_key: str = None) -> AwoxMeshLight:
+    def _connect(
+        address, username: str, password: str, mesh_key: str = None
+    ) -> AwoxMeshLight:
 
         # Try to connect with factory defaults
         light = AwoxMeshLight(address)
@@ -85,7 +93,7 @@ class DeviceScanner:
 
         # When connected with factory defaults and `mesh_key` is set add device to our mesh
         if light.session_key and mesh_key is not None:
-            _LOGGER.info('Add %s to our mesh', address)
+            _LOGGER.info("Add %s to our mesh", address)
             light.setMesh(username, password, mesh_key)
 
         if not light.session_key:

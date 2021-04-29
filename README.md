@@ -10,10 +10,10 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 > Work is based on the [python-awox-mesh-light](https://github.com/Leiaz/python-awox-mesh-light) Python package created by @leiaz to control AwoX mesh lights bulbs.
 
 ## Supported devices
-- Bluethoot devices that use the `ble.tlmesh` protocol  
-  _(when adding your devices check the logs and check for the `type` of your device, when it starts with `.ble.tlmesh.light*` it probably supported)_  
-    
-  **Tested with following lights:**  
+- Bluethoot devices that use the `ble.tlmesh` protocol
+  _(when adding your devices check the logs and check for the `type` of your device, when it starts with `.ble.tlmesh.light*` it probably supported)_
+
+  **Tested with following lights:**
   _(Tested with firmware `v2.2.x` but should work with all `>= v1.2.4`)_
   - Eglo (120) RGBW spots (`ESpot_120` HW v4.3)
   - LED strip 3m (HW v4.0 and v4.3)
@@ -34,12 +34,12 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
 ## Installation
 
 ### Install pre-conditions
-Your Home Assistant system needs to have access to a bluetooth device to access the lights. 
+Your Home Assistant system needs to have access to a bluetooth device to access the lights.
 
 Further it requires pybluez to be installed. On Debian based installs, run
 
 ```
-sudo apt install bluetooth libbluetooth-dev
+sudo apt install bluetooth libbluetooth-dev rfkill
 ```
 _(already part of Home Assistant Operating System / HassOS)_
 
@@ -71,7 +71,7 @@ Do you have [HACS](https://hacs.xyz/) installed?
 1. Search for and select `AwoX MESH control`
 1. Enter you `username` and `password` you also use in the **AwoX Smart Control** app
 1. The system will download you light list and add them to Home Assistant
-1. Once the system could connect to one of the lights your lights will show up as _available_ and can be controlled from HA   
+1. Once the system could connect to one of the lights your lights will show up as _available_ and can be controlled from HA
 1. Enjoy
 
 

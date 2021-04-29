@@ -14,6 +14,13 @@
           "mesh_key": "Mesh long term key"
         }
       },
+      "user": {
+        "title": "AwoX connect or local scan",
+        "description": "Use AwoX connect of local scan to find lights",
+        "data": {
+          "connect": "Use AwoX connect?"
+        }
+      },
       "manual": {
         "title": "Add mac address",
         "description": "Scan failed, place check documentation about scanning locally and fill here the device address",
