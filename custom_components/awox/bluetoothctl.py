@@ -16,7 +16,13 @@ class Bluetoothctl:
     """A wrapper for bluetoothctl utility."""
 
     def __init__(self):
-        subprocess.check_output("PATH=/usr/sbin:$PATH; rfkill unblock bluetooth", shell=True)
+        try:
+            subprocess.check_output(
+                "PATH=/usr/sbin:$PATH; rfkill unblock bluetooth", shell=True
+            )
+        except Exception as e:
+            logger.warning("Failed to unblock active bluetooth connections", exc_info=1)
+
         self.process = pexpect.spawnu("bluetoothctl", echo=False)
 
     def send(self, command, pause=0):
@@ -57,26 +63,26 @@ class Bluetoothctl:
 
         for line in command_output:
             # search for mac address
-            address_search = re.search(r'Device ((?:[\da-fA-F]{2}[:\-]){5}[\da-fA-F]{2})', line)
+            address_search = re.search(
+                r"Device ((?:[\da-fA-F]{2}[:\-]){5}[\da-fA-F]{2})", line
+            )
 
             if not address_search:
                 continue
             address = address_search.group(1)
             if address not in devices:
-                devices[address] = {
-                    'mac': address,
-                    'name': address,
-                    'rssi': None
-                }
+                devices[address] = {"mac": address, "name": address, "rssi": None}
 
-            device_name_search = re.search(r'^Device ((?:[\da-fA-F]{2}[:\-]){5}[\da-fA-F]{2}) (.*)', line)
+            device_name_search = re.search(
+                r"^Device ((?:[\da-fA-F]{2}[:\-]){5}[\da-fA-F]{2}) (.*)", line
+            )
             if device_name_search:
-                devices[address]['name'] = device_name_search.group(2)
+                devices[address]["name"] = device_name_search.group(2)
 
-            rssi_search = re.search(r'RSSI: (-[0-9]+)$', line)
+            rssi_search = re.search(r"RSSI: (-[0-9]+)$", line)
             if rssi_search:
-                devices[address]['rssi'] = int(rssi_search.group(1))
-        logger.info('found: %s', devices)
+                devices[address]["rssi"] = int(rssi_search.group(1))
+        logger.info("found: %s", devices)
         return devices
 
     def get_available_devices(self) -> dict:
