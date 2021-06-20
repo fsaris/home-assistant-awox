@@ -270,6 +270,9 @@ class AwoxMesh(DataUpdateCoordinator):
                 _LOGGER.info('[%s][%s] Failed to connect, trying next device [%s]',
                                   device.mac, device_info['name'], e)
 
+            _LOGGER.debug('Stop connect call')
+            await self.hass.async_add_executor_job(device.stop)
+
         if self._connected_bluetooth_device is not None:
             self._connected_bluetooth_device.status_callback = self.mesh_status_callback
 

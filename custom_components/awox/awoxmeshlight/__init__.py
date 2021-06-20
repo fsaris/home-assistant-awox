@@ -179,6 +179,9 @@ class Peripheral(btle.Peripheral):
             else:
                 raise btle.BTLEInternalError("Unexpected response (%s)" % respType, resp)
 
+    def stop(self):
+        self._stopHelper()
+
 
 class Delegate(btle.DefaultDelegate):
     def __init__(self, light):
@@ -559,6 +562,15 @@ class AwoxMeshLight:
             self.btdevice.disconnect()
         except Exception as err:
             logger.warning('Disconnect failed: %s', err)
+
+        self.session_key = None
+
+    def stop(self):
+        logger.debug("force stoppping blue helper")
+        try:
+            self.btdevice.stop()
+        except Exception as err:
+            logger.warning('Stop failed: %s', err)
 
         self.session_key = None
 
