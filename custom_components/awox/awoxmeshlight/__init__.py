@@ -562,6 +562,7 @@ class AwoxMeshLight:
             self.btdevice.disconnect()
         except Exception as err:
             logger.warning('Disconnect failed: %s', err)
+            self.stop()
 
         self.session_key = None
 
