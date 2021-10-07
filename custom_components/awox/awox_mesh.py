@@ -215,6 +215,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
             except Exception as e:
                 _LOGGER.exception('Command failed and skipped - %s', e)
+                self._disconnect_current_device()
 
             if 'callback' in command:
                 command['callback']()
