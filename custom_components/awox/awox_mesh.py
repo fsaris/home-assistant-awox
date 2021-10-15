@@ -119,9 +119,9 @@ class AwoxMesh(DataUpdateCoordinator):
                 # Give mesh time to gather status updates
                 await asyncio.sleep(.5)
 
-            # Disable devices we didn't get a response the last 30 minutes
+            # Disable devices we didn't get a response the last 60 minutes
             if self._devices[mesh_id]['last_update'] is not None \
-                    and self._devices[mesh_id]['last_update'] < datetime.now() - timedelta(minutes=2):
+                    and self._devices[mesh_id]['last_update'] < datetime.now() - timedelta(seconds=60):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
 
@@ -215,7 +215,9 @@ class AwoxMesh(DataUpdateCoordinator):
 
             except Exception as e:
                 _LOGGER.exception('Command failed and skipped - %s', e)
-                self._disconnect_current_device()
+                asyncio.run_coroutine_threadsafe(
+                    self._disconnect_current_device(), self.hass.loop
+                ).result()
 
             if 'callback' in command:
                 command['callback']()
@@ -229,20 +231,32 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             return False
 
-        # Call command
-        if isinstance(command['params'], tuple):
-            res = getattr(self._connected_bluetooth_device, command['command'])(*command['params'])
-        else:
-            res = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
+        failed = False
+        try:
+            # Call command
+            if isinstance(command['params'], tuple):
+                result = getattr(self._connected_bluetooth_device, command['command'])(*command['params'])
+            else:
+                result = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
+        except Exception as e:
+            _LOGGER.exception('Command failed - %s', e)
+            result = None
+            failed = True
 
-        _LOGGER.debug('Command result: %s', res)
+        _LOGGER.debug('Command result: %s', result)
 
-        if res is None and not command['allow_to_fail']:
+        # We always expect result else we assume command wasn't successful
+        if result is None and not command['allow_to_fail'] and not failed:
             _LOGGER.info('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
-            device = self._connected_bluetooth_device
-            self._connected_bluetooth_device = None
-            self.hass.states.set("awox_mesh." + self._mesh_name, "disconnected")
-            device.disconnect()
+            failed = True
+
+        if failed:
+            asyncio.run_coroutine_threadsafe(
+                self._disconnect_current_device(), self.hass.loop
+            ).result()
+
+        # Only report failure for commands that we do not allow to fail (status updates are for example commands we allow to fail)
+        if failed and not command['allow_to_fail']:
             return False
 
         return True
