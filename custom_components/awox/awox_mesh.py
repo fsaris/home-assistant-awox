@@ -44,7 +44,8 @@ class AwoxMesh(DataUpdateCoordinator):
 
         self._state = {
             'last_rssi_check': None,
-            'mesh': None,
+            'last_connection': None,
+            'last_connected_device': None,
         }
 
         self._devices = {}
@@ -93,6 +94,11 @@ class AwoxMesh(DataUpdateCoordinator):
                 or self._state['last_rssi_check'] < datetime.now() - timedelta(hours=24):
             await self._async_get_devices_rssi()
 
+        # Reconnect bluetooth every 2 ours to prevent connection freeze
+        if self._state['last_connection'] is None \
+                or self._state['last_connection'] < datetime.now() - timedelta(hours=2):
+            await self._disconnect_current_device()
+
         _LOGGER.info('async_update: Request status')
         await self._async_add_command_to_queue('requestStatus', {'dest': 0xffff, 'withResponse': True})
 
@@ -119,9 +125,9 @@ class AwoxMesh(DataUpdateCoordinator):
                 # Give mesh time to gather status updates
                 await asyncio.sleep(.5)
 
-            # Disable devices we didn't get a response the last 60 minutes
+            # Disable devices we didn't get a response the last 90 minutes
             if self._devices[mesh_id]['last_update'] is not None \
-                    and self._devices[mesh_id]['last_update'] < datetime.now() - timedelta(seconds=60):
+                    and self._devices[mesh_id]['last_update'] < datetime.now() - timedelta(seconds=90):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
 
@@ -132,9 +138,9 @@ class AwoxMesh(DataUpdateCoordinator):
                 self._devices[mesh_id]['last_update'] = None
 
     async def _async_update_mesh_state(self):
-        state = "disconnected"
+        state = 'disconnected'
         if self.is_connected():
-            state = "connected"
+            state = self._state['last_connected_device']
         self.hass.states.async_set("awox_mesh." + self._mesh_name, state, self._state)
 
     @callback
@@ -209,9 +215,9 @@ class AwoxMesh(DataUpdateCoordinator):
             _LOGGER.debug('process 0/%d - %s', self._queue.qsize(), command)
             try:
                 tries = 0
-                while not self._call_command(command) and tries < 2:
-                    _LOGGER.debug('retry calling command')
+                while not self._call_command(command) and tries < 3:
                     tries = tries + 1
+                    _LOGGER.warning('Command failed, retry %s', tries)
 
             except Exception as e:
                 _LOGGER.exception('Command failed and skipped - %s', e)
@@ -239,7 +245,7 @@ class AwoxMesh(DataUpdateCoordinator):
             else:
                 result = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
         except Exception as e:
-            _LOGGER.exception('Command failed - %s', e)
+            _LOGGER.warning('Command failed, re-connecting for new attempt - %s', e)
             result = None
             failed = True
 
@@ -247,7 +253,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
         # We always expect result else we assume command wasn't successful
         if result is None and not command['allow_to_fail'] and not failed:
-            _LOGGER.info('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
+            _LOGGER.warning('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
             failed = True
 
         if failed:
@@ -275,7 +281,8 @@ class AwoxMesh(DataUpdateCoordinator):
                 async with async_timeout.timeout(10):
                     if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
-                        self._state["mesh"] = device_info["name"]
+                        self._state['last_connected_device'] = device_info['name']
+                        self._state['last_connection'] = datetime.now()
                         await self._async_update_mesh_state()
                         _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
                         break
