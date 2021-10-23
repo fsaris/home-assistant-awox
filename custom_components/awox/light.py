@@ -1,4 +1,6 @@
 """Platform for light integration."""
+from __future__ import annotations
+
 import logging
 
 from .awox_mesh import AwoxMesh
@@ -6,18 +8,19 @@ from typing import Any, Dict, Optional
 
 import homeassistant.util.color as color_util
 from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.entity import DeviceInfo, Entity
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP,
-    ATTR_HS_COLOR,
-    ATTR_WHITE_VALUE,
+    ATTR_RGB_COLOR,
     LightEntity,
-    SUPPORT_BRIGHTNESS,
-    SUPPORT_COLOR,
-    SUPPORT_COLOR_TEMP,
-    SUPPORT_WHITE_VALUE
+    COLOR_MODE_ONOFF,
+    COLOR_MODE_BRIGHTNESS,
+    COLOR_MODE_COLOR_TEMP,
+    COLOR_MODE_RGB
 )
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -31,7 +34,7 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_UNAVAILABLE,
 )
-from .const import DOMAIN, CONF_MESH_ID, CONF_MANUFACTURER, CONF_MODEL, CONF_FIRMWARE, CONF_SUPPORTED_FEATURES
+from .const import DOMAIN, CONF_MESH_ID, CONF_MANUFACTURER, CONF_MODEL, CONF_FIRMWARE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,27 +55,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if CONF_FIRMWARE not in device:
             device[CONF_FIRMWARE] = None
 
-        # No supported_features defined try to extract them from `type`
-        if 'supported_features' not in device:
-            type_string = ''
-            supported_features = 0
-            if 'type' in device:
-                type_string = device['type']
+        type_string = ''
+        supported_color_modes = set()
 
-            if 'color' in type_string:
-                supported_features |= SUPPORT_COLOR
-            if 'dimming' in type_string:
-                supported_features |= SUPPORT_BRIGHTNESS
-            if 'temperature' in type_string:
-                supported_features |= SUPPORT_COLOR_TEMP
-            # if 'white' in type_string:
-            #     supported_features |= SUPPORT_WHITE_VALUE
+        if 'type' in device:
+            type_string = device['type']
 
-            device[CONF_SUPPORTED_FEATURES] = supported_features
+        if 'color' in type_string:
+            supported_color_modes.add(COLOR_MODE_RGB)
 
-        light = AwoxLight(mesh, device[CONF_MAC], device[CONF_MESH_ID], device[CONF_NAME], device[CONF_SUPPORTED_FEATURES],
+        if 'temperature' in type_string:
+            supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+
+        if 'dimming' in type_string:
+            supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+
+        if len(supported_color_modes) == 0:
+            supported_color_modes.add(COLOR_MODE_ONOFF)
+
+        light = AwoxLight(mesh, device[CONF_MAC], device[CONF_MESH_ID], device[CONF_NAME], supported_color_modes,
                           device[CONF_MANUFACTURER], device[CONF_MODEL], device[CONF_FIRMWARE])
-        _LOGGER.info('setup entry [%d] %s', device[CONF_MESH_ID], device[CONF_NAME])
+        _LOGGER.info('Setup entry [%d] %s', device[CONF_MESH_ID], device[CONF_NAME])
 
         lights.append(light)
 
@@ -82,14 +85,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class AwoxLight(CoordinatorEntity, LightEntity):
     """Representation of an Awesome Light."""
 
-    def __init__(self, coordinator: AwoxMesh, mac: str, mesh_id: int, name: str, supported_features: int, manufacturer: str, model: str, firmware: str):
+    def __init__(self, coordinator: AwoxMesh, mac: str, mesh_id: int, name: str, supported_color_modes: set[str] | None,
+                 manufacturer: str, model: str, firmware: str):
         """Initialize an AwoX MESH Light."""
         super().__init__(coordinator)
         self._mesh = coordinator
         self._mac = mac
         self._mesh_id = mesh_id
-        self._name = name
-        self._supported_features = supported_features
+
+        self._attr_name = name
+        self._attr_unique_id = "awoxmesh-%s" % self._mesh_id
+        self._attr_supported_color_modes = supported_color_modes
 
         self._manufacturer = manufacturer
         self._model = model
@@ -106,23 +112,20 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         self._white_brightness = None
         self._color_brightness = None
 
-
     @property
     def should_poll(self) -> bool:
         """Mesh triggers state update reporting."""
         return False
 
     @property
-    def device_info(self) -> Optional[Dict[str, Any]]:
-        """Get device specific attributes."""
-        return (
-            {
-                "identifiers": {(DOMAIN, self.unique_id)},
-                "name": self.name,
-                "manufacturer": self._manufacturer,
-                "model": self._model.replace('_', ' '),
-                "sw_version": self._firmware,
-            }
+    def device_info(self) -> DeviceInfo:
+        """Get device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.unique_id)},
+            name=self.name,
+            manufacturer=self._manufacturer,
+            model=self._model.replace('_', ' '),
+            sw_version=self._firmware,
         )
 
     @property
@@ -147,27 +150,13 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         return STATE_ON if self.is_on else STATE_OFF
 
     @property
-    def name(self):
-        """Return the display name of this light."""
-        return self._name
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return "awoxmesh-%s" % self._mesh_id
-
-    @property
-    def hs_color(self):
+    def rgb_color(self):
         """Return color when in color mode"""
-
-        if not self._color_mode:
-            return None
-
-        return color_util.color_RGB_to_hs(*[
+        return (
             self._red,
             self._green,
             self._blue
-        ])
+        )
 
     @property
     def color_temp(self):
@@ -177,16 +166,9 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         return int(self._white_temperature)
 
     @property
-    def white_value(self):
-        """Return the white property (white brightness)."""
-        if self._white_brightness is None:
-            return None
-        return int(int(self._white_brightness) / int(0x7f) * 255)
-
-    @property
     def brightness(self):
         """Return the brightness of the light."""
-        if not self._color_mode and not self._supported_features & SUPPORT_WHITE_VALUE:
+        if self.color_mode != COLOR_MODE_RGB:
             if self._white_brightness is None:
                 return None
             return int(int(self._white_brightness) / int(0x7f) * 255)
@@ -212,29 +194,23 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         """Return true if light is on."""
         return bool(self._state)
 
-    @property
-    def supported_features(self):
-        """Flag supported features."""
-        return self._supported_features
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
-        supported_features = self._supported_features
         status = {}
 
         _LOGGER.debug('[%s] Turn on %s', self.unique_id, kwargs)
 
-        if ATTR_HS_COLOR in kwargs and supported_features & SUPPORT_COLOR:
-            hs_color = kwargs[ATTR_HS_COLOR]
-            rgb = color_util.color_hsv_to_RGB(hs_color[0], hs_color[1], 100)
+        if ATTR_RGB_COLOR in kwargs:
+            rgb = kwargs[ATTR_RGB_COLOR]
             await self._mesh.async_set_color(self._mesh_id, rgb[0], rgb[1], rgb[2])
-            status['state'] = True
             status['red'] = rgb[0]
             status['green'] = rgb[1]
             status['blue'] = rgb[2]
+            status['state'] = True
 
-        if ATTR_BRIGHTNESS in kwargs and supported_features & SUPPORT_BRIGHTNESS:
-            if not self._color_mode and not supported_features & SUPPORT_WHITE_VALUE:
+        if ATTR_BRIGHTNESS in kwargs:
+            status['state'] = True
+            if self.color_mode != COLOR_MODE_RGB:
                 min_device = int(1)
                 max_device = int(0x7f)
                 brightness_normalized = kwargs.get(ATTR_BRIGHTNESS) / 255
@@ -244,7 +220,6 @@ class AwoxLight(CoordinatorEntity, LightEntity):
                 )
                 device_brightness = max(device_brightness, min_device)
                 await self._mesh.async_set_white_brightness(self._mesh_id, device_brightness)
-                status['state'] = True
                 status['white_brightness'] = device_brightness
             else:
                 min_device = int(0xa)
@@ -257,15 +232,14 @@ class AwoxLight(CoordinatorEntity, LightEntity):
                 )
                 device_brightness = max(device_brightness, min_device)
                 await self._mesh.async_set_color_brightness(self._mesh_id, device_brightness)
-                status['state'] = True
                 status['color_brightness'] = device_brightness
 
-        if ATTR_COLOR_TEMP in kwargs and supported_features & SUPPORT_COLOR_TEMP:
+        if ATTR_COLOR_TEMP in kwargs:
             max_device = int(0x7f)
             max_hass = self.max_mireds
-            brightness_normalized = kwargs[ATTR_COLOR_TEMP] / max_hass
+            color_temp_normalized = kwargs[ATTR_COLOR_TEMP] / max_hass
             device_white_temp = min(
-                round(brightness_normalized * max_device),
+                round(color_temp_normalized * max_device),
                 max_device,
             )
             # Make sure the brightness is not rounded down to 0
@@ -273,20 +247,6 @@ class AwoxLight(CoordinatorEntity, LightEntity):
             await self._mesh.async_set_white_temperature(self._mesh_id, device_white_temp)
             status['state'] = True
             status['white_temperature'] = device_white_temp
-
-        if ATTR_WHITE_VALUE in kwargs and supported_features & SUPPORT_WHITE_VALUE:
-            max_device = int(0x7f)
-            max_hass = 255
-            brightness_normalized = kwargs[ATTR_WHITE_VALUE] / max_hass
-            device_brightness = min(
-                round(brightness_normalized * max_device),
-                max_device,
-            )
-            # Make sure the brightness is not rounded down to 0
-            device_brightness = max(device_brightness, 1)
-            await self._mesh.async_set_white_brightness(self._mesh_id, device_brightness)
-            status['state'] = True
-            status['white_brightness'] = device_brightness
 
         if 'state' not in status:
             await self._mesh.async_on(self._mesh_id)
@@ -302,12 +262,9 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
     @callback
     def status_callback(self, status) -> None:
-        _LOGGER.debug('[%s][%s] Status callback: %s', self.unique_id, self.name, status)
 
         if 'state' in status:
             self._state = status['state']
-        if 'color_mode' in status:
-            self._color_mode = status['color_mode']
         if 'white_brightness' in status:
             self._white_brightness = status['white_brightness']
         if 'white_temperature' in status:
@@ -320,4 +277,18 @@ class AwoxLight(CoordinatorEntity, LightEntity):
             self._green = status['green']
         if 'blue' in status:
             self._blue = status['blue']
+
+        if 'color_mode' in status:
+            supported_color_modes = self.supported_color_modes
+            color_mode = COLOR_MODE_ONOFF
+            if status['color_mode']:
+                color_mode = COLOR_MODE_RGB
+            elif COLOR_MODE_COLOR_TEMP in supported_color_modes:
+                color_mode = self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+            elif COLOR_MODE_BRIGHTNESS in supported_color_modes:
+                color_mode = self._attr_color_mode = COLOR_MODE_BRIGHTNESS
+            self._attr_color_mode = color_mode
+
+        _LOGGER.debug('[%s][%s] mode[%s] Status callback: %s', self.unique_id, self.name, self._attr_color_mode, status)
+
         self.async_write_ha_state()
