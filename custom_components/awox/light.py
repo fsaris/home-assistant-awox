@@ -81,6 +81,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     async_add_entities(lights)
 
+def convert_value_to_available_range(value, min_from, max_from, min_to, max_to) -> int:
+
+    normalized = (value - min_from) / (max_from - min_from)
+    new_value = min(
+        round((normalized * (max_to - min_to)) + min_to),
+        max_to,
+    )
+    return max(new_value, min_to)
+
 
 class AwoxLight(CoordinatorEntity, LightEntity):
     """Representation of an Awesome Light."""
@@ -163,7 +172,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         """Return the color temperature in mired."""
         if self._white_temperature is None:
             return None
-        return int(self._white_temperature)
+        return convert_value_to_available_range(self._white_temperature, 0, int(0x7f), self.min_mireds, self.max_mireds)
 
     @property
     def brightness(self):
@@ -171,23 +180,22 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         if self.color_mode != COLOR_MODE_RGB:
             if self._white_brightness is None:
                 return None
-            return int(int(self._white_brightness) / int(0x7f) * 255)
+            return convert_value_to_available_range(self._white_brightness, int(1), int(0x7f), 0, 255)
 
         if self._color_brightness is None:
             return None
 
-        min_device = int(0xa)
-        max_device = int(0x64)
-        max_ha = 255
-        return int((int(self._color_brightness) - min_device) / (max_device - min_device) * max_ha)
+        return convert_value_to_available_range(self._color_brightness, int(0xa), int(0x64), 0, 255)
 
     @property
     def min_mireds(self):
-        return 1
+        # 6500 Kelvin
+        return 153
 
     @property
     def max_mireds(self):
-        return int(0x7f)
+        # 2700 Kelvin
+        return 370
 
     @property
     def is_on(self):
@@ -211,39 +219,16 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         if ATTR_BRIGHTNESS in kwargs:
             status['state'] = True
             if self.color_mode != COLOR_MODE_RGB:
-                min_device = int(1)
-                max_device = int(0x7f)
-                brightness_normalized = kwargs.get(ATTR_BRIGHTNESS) / 255
-                device_brightness = min(
-                    round(brightness_normalized * max_device),
-                    max_device,
-                )
-                device_brightness = max(device_brightness, min_device)
+                device_brightness = convert_value_to_available_range(kwargs[ATTR_BRIGHTNESS], 0, 255, int(1), int(0x7f))
                 await self._mesh.async_set_white_brightness(self._mesh_id, device_brightness)
                 status['white_brightness'] = device_brightness
             else:
-                min_device = int(0xa)
-                max_device = int(0x64)
-                max_ha = 255
-                brightness_normalized = kwargs.get(ATTR_BRIGHTNESS) / max_ha
-                device_brightness = min(
-                    round((brightness_normalized * (max_device - min_device)) + min_device),
-                    max_device,
-                )
-                device_brightness = max(device_brightness, min_device)
+                device_brightness = convert_value_to_available_range(kwargs[ATTR_BRIGHTNESS], 0, 255, int(0xa), int(0x64))
                 await self._mesh.async_set_color_brightness(self._mesh_id, device_brightness)
                 status['color_brightness'] = device_brightness
 
         if ATTR_COLOR_TEMP in kwargs:
-            max_device = int(0x7f)
-            max_hass = self.max_mireds
-            color_temp_normalized = kwargs[ATTR_COLOR_TEMP] / max_hass
-            device_white_temp = min(
-                round(color_temp_normalized * max_device),
-                max_device,
-            )
-            # Make sure the brightness is not rounded down to 0
-            device_white_temp = max(device_white_temp, self.min_mireds)
+            device_white_temp = convert_value_to_available_range(kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds, 0, int(0x7f))
             await self._mesh.async_set_white_temperature(self._mesh_id, device_white_temp)
             status['state'] = True
             status['white_temperature'] = device_white_temp
