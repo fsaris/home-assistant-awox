@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
         light = AwoxLight(mesh, device[CONF_MAC], device[CONF_MESH_ID], device[CONF_NAME], supported_color_modes,
                           device[CONF_MANUFACTURER], device[CONF_MODEL], device[CONF_FIRMWARE])
-        _LOGGER.info('Setup entry [%d] %s', device[CONF_MESH_ID], device[CONF_NAME])
+        _LOGGER.info('Setup light [%d] %s', device[CONF_MESH_ID], device[CONF_NAME])
 
         lights.append(light)
 
@@ -135,6 +135,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
             manufacturer=self._manufacturer,
             model=self._model.replace('_', ' '),
             sw_version=self._firmware,
+            via_device=(DOMAIN, self._mesh_id),
         )
 
     @property
