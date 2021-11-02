@@ -45,7 +45,7 @@ class AwoxMesh(DataUpdateCoordinator):
         self._state = {
             'last_rssi_check': None,
             'last_connection': None,
-            'last_connected_device': None,
+            'connected_device': None,
         }
 
         self._devices = {}
@@ -71,6 +71,18 @@ class AwoxMesh(DataUpdateCoordinator):
 
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, startup)
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, shutdown)
+
+    @property
+    def mesh_name(self) -> str:
+        return self._mesh_name
+
+    @property
+    def identifier(self) -> str:
+        return 'awox_mesh.' + self._mesh_name
+
+    @property
+    def state(self):
+        return self._state
 
     def register_device(self, mesh_id: int, mac: str, name: str, callback_func: CALLBACK_TYPE):
         self._devices[mesh_id] = {
@@ -131,6 +143,8 @@ class AwoxMesh(DataUpdateCoordinator):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
 
+        return self._state
+
     def update_status_of_all_devices_to_disabled(self):
         for mesh_id, device_info in self._devices.items():
             if device_info['last_update'] is not None:
@@ -138,10 +152,11 @@ class AwoxMesh(DataUpdateCoordinator):
                 self._devices[mesh_id]['last_update'] = None
 
     async def _async_update_mesh_state(self):
-        state = 'disconnected'
-        if self.is_connected():
-            state = self._state['last_connected_device']
-        self.hass.states.async_set("awox_mesh." + self._mesh_name, state, self._state)
+        if not self.is_connected():
+            self._state['connected_device'] = None
+
+        for update_callback in self._listeners:
+            update_callback()
 
     @callback
     def mesh_status_callback(self, status):
@@ -281,7 +296,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 async with async_timeout.timeout(10):
                     if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
-                        self._state['last_connected_device'] = device_info['name']
+                        self._state['connected_device'] = device_info['name']
                         self._state['last_connection'] = datetime.now()
                         await self._async_update_mesh_state()
                         _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])

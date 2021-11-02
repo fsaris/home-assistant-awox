@@ -7,7 +7,7 @@ from .awox_mesh import AwoxMesh
 from typing import Any
 
 from homeassistant.helpers.typing import StateType
-from homeassistant.helpers.entity import DeviceInfo, Entity, ToggleEntity
+from homeassistant.helpers.entity import DeviceInfo, ToggleEntity
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -77,11 +77,6 @@ class AwoxPlug(CoordinatorEntity, ToggleEntity):
         self._state = None
 
     @property
-    def should_poll(self) -> bool:
-        """Mesh triggers state update reporting."""
-        return False
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Get device info."""
         return DeviceInfo(
@@ -90,7 +85,7 @@ class AwoxPlug(CoordinatorEntity, ToggleEntity):
             manufacturer=self._manufacturer,
             model=self._model.replace('_', ' '),
             sw_version=self._firmware,
-            via_device=(DOMAIN, self._mesh_id),
+            via_device=(DOMAIN, self._mesh.identifier),
         )
 
     @property
@@ -136,3 +131,7 @@ class AwoxPlug(CoordinatorEntity, ToggleEntity):
         _LOGGER.debug('[%s][%s] Status callback: %s', self.unique_id, self.name, status)
 
         self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """No action here, update is handled by status_callback"""

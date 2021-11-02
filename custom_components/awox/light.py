@@ -122,11 +122,6 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         self._color_brightness = None
 
     @property
-    def should_poll(self) -> bool:
-        """Mesh triggers state update reporting."""
-        return False
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Get device info."""
         return DeviceInfo(
@@ -135,7 +130,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
             manufacturer=self._manufacturer,
             model=self._model.replace('_', ' '),
             sw_version=self._firmware,
-            via_device=(DOMAIN, self._mesh_id),
+            via_device=(DOMAIN, self._mesh.identifier),
         )
 
     @property
@@ -278,3 +273,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         _LOGGER.debug('[%s][%s] mode[%s] Status callback: %s', self.unique_id, self.name, self._attr_color_mode, status)
 
         self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """No action here, update is handled by status_callback"""
