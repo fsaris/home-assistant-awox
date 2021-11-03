@@ -29,16 +29,16 @@ class DeviceScanner:
         return False
 
     @staticmethod
-    async def async_find_devices(hass: HomeAssistant):
+    async def async_find_devices(hass: HomeAssistant, scan_timeout: int = 30):
         def init():
             return Bluetoothctl()
         devices = {}
 
         try:
             bl = await hass.async_add_executor_job(init)
-            _LOGGER.info("Scanning 30 seconds for AwoX bluetooth mesh devices!")
+            _LOGGER.info("Scanning %d seconds for AwoX bluetooth mesh devices!", scan_timeout)
             await hass.async_add_executor_job(bl.start_scan)
-            await asyncio.sleep(30)
+            await asyncio.sleep(scan_timeout)
 
             for mac, dev in (await hass.async_add_executor_job(bl.get_available_devices)).items():
                 if mac.startswith(START_MAC_ADDRESS):

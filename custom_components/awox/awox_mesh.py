@@ -307,21 +307,30 @@ class AwoxMesh(DataUpdateCoordinator):
                 _LOGGER.info('[%s][%s] Failed to connect, trying next device [%s]',
                                   device.mac, device_info['name'], e)
 
-            _LOGGER.debug('Stop connect call')
+            _LOGGER.debug('[%s][%s] Setting up Bluetooth connection failed, making sure Bluetooth device stops trying', device.mac, device_info['name'])
             await self.hass.async_add_executor_job(device.stop)
 
         if self._connected_bluetooth_device is not None:
             self._connected_bluetooth_device.status_callback = self.mesh_status_callback
 
     async def _async_get_devices_rssi(self):
-        _LOGGER.info('Search for AwoX devices to find closest (best rssi value) device')
-        devices = await DeviceScanner.async_find_devices(hass=self.hass)
-        _LOGGER.debug('devices: %s', devices)
+        _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
+        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=40)
+
+        _LOGGER.debug('Scan result: %s', devices)
 
         for mesh_id, device_info in self._devices.items():
             if device_info['mac'].upper() in devices and devices[device_info['mac'].upper()]['rssi'] is not None:
+                _LOGGER.info('[%s][%s] Bluetooth scan returns RSSI value = %s', device_info['mac'], device_info['name'],
+                             devices[device_info['mac'].upper()]['rssi'])
                 self._devices[mesh_id]['rssi'] = devices[device_info['mac'].upper()]['rssi']
+
+            elif device_info['mac'].upper() in devices:
+                _LOGGER.info('[%s][%s] Bluetooth scan returns no RSSI value', device_info['mac'], device_info['name'])
+                self._devices[mesh_id]['rssi'] = -99999
+
             else:
+                _LOGGER.info('[%s][%s] Device NOT found during Bluetooth scan', device_info['mac'], device_info['name'])
                 self._devices[mesh_id]['rssi'] = -999999
 
         self._state['last_rssi_check'] = datetime.now()

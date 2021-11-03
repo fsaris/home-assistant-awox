@@ -142,11 +142,13 @@ class Peripheral(btle.Peripheral):
             if self._helper.poll() is not None:
                 raise btle.BTLEInternalError("Helper exited")
 
+            logger.debug("_waitResp - waiting for %s", wantType)
+
             if timeout:
-                logger.debug("_waitResp - set timeout to %d", timeout)
+                logger.debug("_waitResp - set timeout to %d seconds", timeout)
                 fds = self._poller.poll(timeout*1000)
                 if len(fds) == 0:
-                    logger.debug("Select timeout")
+                    logger.debug("_waitResp - timeout - no result received within timeout")
                     return None
 
             rv = self._helper.stdout.readline()
@@ -453,7 +455,7 @@ class AwoxMeshLight:
             logger.info('Unknown command [%d]', command)
 
         if status and status['mesh_id'] == self.mesh_id:
-            logger.info('Update light status - mesh_id %d', status['mesh_id'])
+            logger.info('Update device status - mesh_id %d', status['mesh_id'])
             self.state = status['state']
             self.color_mode = status['color_mode']
             self.transition_mode = status['transition_mode']
