@@ -24,11 +24,12 @@ Control your AwoX, Eglo, ... bluetooth lights from Home Assistant
   - Eglo Fueva-C RGB CCT
   - Eglo Crossling RGBW Spot (`ETriSpot 85` HW 4.31, firmware 2.2.6)
   - Eglo Crossling RGBW Spot (`ESpot 170` HW 4.30, firmware 2.2.6)
+  - Eglo Connect Plug Plus (on/off support over Bluetooth)
 - `.ble.zigbee.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/2
 - `.wifi.light.*` are currently **not** supported see https://github.com/fsaris/home-assistant-awox/issues/17
 
 ## Current features
-- Supports RGBW mesh **lights**
+- Supports RGBW mesh **lights** and **plugs** (plug only on/off for now)
 - Uses the AwoX app credentials to access the AwoX server to download light info during initial setup
 
 ## Installation
@@ -65,7 +66,7 @@ Do you have [HACS](https://hacs.xyz/) installed?
 2. Create another folder `awox` in the `custom_components` folder. Copy all files from `custom_components/awox` into the `awox` folder.
 
 ## Setup
-1. In Home Assitant click on `Configuration`
+1. In Home Assistant click on `Configuration`
 1. Click on `Integrations`
 1. Click on `+ Add integration`
 1. Search for and select `AwoX MESH control`
@@ -76,11 +77,9 @@ Do you have [HACS](https://hacs.xyz/) installed?
 
 
 ## Todo
-- [x] Improve stability of mesh connection
 - [ ] Add option to refetch/update devices from **AwoX Smart Control** account
 - [ ] Finish support adding lights without **AwoX Smart Control** account _(full local support)_
-- [ ] Add support for `plugs` and other devices _(currently do not own such a device, maybe you can sponser me one so I can try to add support for it)_
-- [ ] Add **non** mesh light support _(not sure is there is a request for this)_
+- [ ] Add support for `plug` power monitoring _(currently do not own such a device, maybe you can sponser me one so I can try to add support for it)_
 - [ ] Add support for `ble.zigbee` devices _(if possible)_
 
 
