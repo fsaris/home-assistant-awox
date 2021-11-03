@@ -20,6 +20,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     DEVICE_CLASS_TIMESTAMP,
+    ENTITY_CATEGORY_DIAGNOSTIC,
 )
 from .const import DOMAIN
 
@@ -29,7 +30,8 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key='connected_device',
         name="AwoX mesh",
-        icon="mdi:bluetooth-connect",
+        icon="mdi:bluetooth-audio",
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key='last_rssi_check',
@@ -37,6 +39,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         device_class=DEVICE_CLASS_TIMESTAMP,
         icon="mdi:calendar-clock",
         entity_registry_enabled_default=False,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key='last_connection',
@@ -44,6 +47,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         device_class=DEVICE_CLASS_TIMESTAMP,
         icon="mdi:calendar-clock",
         entity_registry_enabled_default=False,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
 )
 
