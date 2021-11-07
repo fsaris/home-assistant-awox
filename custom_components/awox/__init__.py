@@ -1,5 +1,6 @@
 """AwoX integration."""
 
+import asyncio
 import logging
 
 from .awox_mesh import AwoxMesh
@@ -44,6 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass, entry) -> bool:
     """Unload a config entry."""
+    _LOGGER.info('Unload entry %s', entry.entry_id)
     if entry.entry_id in hass.data[DOMAIN]:
         await hass.data[DOMAIN][entry.entry_id].async_shutdown()
 

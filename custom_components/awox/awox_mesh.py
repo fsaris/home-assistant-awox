@@ -109,6 +109,7 @@ class AwoxMesh(DataUpdateCoordinator):
         # Reconnect bluetooth every 2 ours to prevent connection freeze
         if self._state['last_connection'] is None \
                 or self._state['last_connection'] < datetime.now() - timedelta(hours=2):
+            _LOGGER.info('async_update: Force disconnect to prevent connection freeze')
             await self._disconnect_current_device()
 
         _LOGGER.info('async_update: Request status')
