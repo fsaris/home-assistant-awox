@@ -104,16 +104,19 @@ class AwoxMesh(DataUpdateCoordinator):
 
         if self._state['last_rssi_check'] is None \
                 or self._state['last_rssi_check'] < datetime.now() - timedelta(hours=24):
-            await self._async_get_devices_rssi()
+            async with async_timeout.timeout(120):
+                await self._async_get_devices_rssi()
 
         # Reconnect bluetooth every 2 ours to prevent connection freeze
         if self._state['last_connection'] is None \
                 or self._state['last_connection'] < datetime.now() - timedelta(hours=2):
             _LOGGER.info('async_update: Force disconnect to prevent connection freeze')
-            await self._disconnect_current_device()
+            async with async_timeout.timeout(10):
+                await self._disconnect_current_device()
 
         _LOGGER.info('async_update: Request status')
-        await self._async_add_command_to_queue('requestStatus', {'dest': 0xffff, 'withResponse': True})
+        async with async_timeout.timeout(20):
+            await self._async_add_command_to_queue('requestStatus', {'dest': 0xffff, 'withResponse': True})
 
         # Not connected after executing command then we assume we could not connect to a device
         if not self.is_connected():
@@ -133,7 +136,8 @@ class AwoxMesh(DataUpdateCoordinator):
                     or device_info['last_update'] < datetime.now() - timedelta(seconds=60):
                 _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
 
-                await self._async_add_command_to_queue('requestStatus', {'dest': mesh_id, 'withResponse': True}, True)
+                async with async_timeout.timeout(20):
+                    await self._async_add_command_to_queue('requestStatus', {'dest': mesh_id, 'withResponse': True}, True)
 
                 # Give mesh time to gather status updates
                 await asyncio.sleep(.5)
@@ -196,7 +200,8 @@ class AwoxMesh(DataUpdateCoordinator):
         try:
             device = self._connected_bluetooth_device
             self._connected_bluetooth_device = None
-            await self.hass.async_add_executor_job(device.disconnect)
+            async with async_timeout.timeout(10):
+                await self.hass.async_add_executor_job(device.disconnect)
         except Exception as e:
             _LOGGER.exception('Failed to disconnect [%s]', e)
 
@@ -208,6 +213,11 @@ class AwoxMesh(DataUpdateCoordinator):
         return await self._disconnect_current_device()
 
     async def _async_add_command_to_queue(self, command: str, params, allow_to_fail: bool = False):
+        _LOGGER.info('Queue command %s %s', command, params)
+
+        if not self._command_tread.is_alive():
+            raise UpdateFailed("Command tread died!")
+
         done = False
 
         def command_executed():
