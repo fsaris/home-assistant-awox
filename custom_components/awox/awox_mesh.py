@@ -326,7 +326,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
     async def _async_get_devices_rssi(self):
         _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
-        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=40)
+        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=30)
 
         _LOGGER.debug('Scan result: %s', devices)
 
