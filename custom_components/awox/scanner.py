@@ -1,5 +1,6 @@
 """Awox device scanner class"""
 import asyncio
+import async_timeout
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -44,12 +45,15 @@ class DeviceScanner:
                 if mac.startswith(START_MAC_ADDRESS):
                     devices[mac] = dev
 
+            _LOGGER.debug('Found devices: %s', devices)
+
             await hass.async_add_executor_job(bl.stop_scan)
-            await hass.async_add_executor_job(bl.shutdown)
+
+            async with async_timeout.timeout(10):
+                await hass.async_add_executor_job(bl.shutdown)
 
         except Exception as e:
-            _LOGGER.exception('Failed: %s', e)
-            pass
+            _LOGGER.exception('Find devices process error: %s', e)
 
         return devices
 

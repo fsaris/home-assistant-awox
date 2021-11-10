@@ -9,8 +9,7 @@ import logging
 import re
 
 
-logger = logging.getLogger("btctl")
-
+logger = logging.getLogger(__name__)
 
 class Bluetoothctl:
     """A wrapper for bluetoothctl utility."""
