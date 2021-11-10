@@ -102,17 +102,23 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self._command_tread.is_alive():
             raise UpdateFailed("Command tread died!")
 
-        if self._state['last_rssi_check'] is None \
-                or self._state['last_rssi_check'] < datetime.now() - timedelta(hours=24):
-            async with async_timeout.timeout(120):
-                await self._async_get_devices_rssi()
-
         # Reconnect bluetooth every 2 ours to prevent connection freeze
-        if self._state['last_connection'] is None \
-                or self._state['last_connection'] < datetime.now() - timedelta(hours=2):
+        if self._state['last_connection'] is not None \
+                and self._state['last_connection'] < datetime.now() - timedelta(hours=2):
             _LOGGER.info('async_update: Force disconnect to prevent connection freeze')
             async with async_timeout.timeout(10):
                 await self._disconnect_current_device()
+
+        if self._state['last_rssi_check'] is None \
+                or self._state['last_rssi_check'] < datetime.now() - timedelta(hours=24):
+            try:
+                async with async_timeout.timeout(120):
+                    # Force disconnnect to de-block device
+                    await self._disconnect_current_device()
+                    # Scan for devices and get try to determine there RSSI
+                    await self._async_get_devices_rssi()
+            except Exception as e:
+                _LOGGER.warning('Fetching RSSI failed - %s', e)
 
         _LOGGER.info('async_update: Request status')
         async with async_timeout.timeout(20):
@@ -326,7 +332,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
     async def _async_get_devices_rssi(self):
         _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
-        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=30)
+        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=40)
 
         _LOGGER.debug('Scan result: %s', devices)
 
