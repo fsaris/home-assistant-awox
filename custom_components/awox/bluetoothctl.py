@@ -35,21 +35,21 @@ class Bluetoothctl:
         try:
             self.send("scan on")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to start scan: %s', e)
 
     def stop_scan(self):
         """Stop bluetooth scanning process."""
         try:
             self.send("scan off")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to stop scan: %s', e)
 
     def make_discoverable(self):
         """Make device discoverable."""
         try:
             self.send("discoverable on")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to enable discoverable: %s', e)
 
     def parse_device_info(self, command_output) -> dict:
         """Parse a string corresponding to a device."""
@@ -85,7 +85,7 @@ class Bluetoothctl:
         try:
             out = self.get_output("devices")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to get available devices: %s', e)
         else:
             available_devices = self.parse_device_info(out)
 
@@ -97,7 +97,7 @@ class Bluetoothctl:
         try:
             out = self.get_output("paired-devices")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to get paired devices: %s', e)
         else:
             paired_devices = self.parse_device_info(out)
         return paired_devices
@@ -107,7 +107,7 @@ class Bluetoothctl:
         try:
             out = self.get_output(f"info {mac_address}")
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to get device info [%s] %s', mac_address, e)
             return False
         else:
             return out
@@ -117,7 +117,7 @@ class Bluetoothctl:
         try:
             self.send(f"pair {mac_address}", 4)
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to pair [%s] %s', mac_address, e)
             return False
         else:
             res = self.process.expect(
@@ -129,7 +129,7 @@ class Bluetoothctl:
         try:
             self.send(f"trust {mac_address}", 4)
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to set trust [%s] %s', mac_address, e)
             return False
         else:
             res = self.process.expect(
@@ -142,7 +142,7 @@ class Bluetoothctl:
         try:
             self.send(f"remove {mac_address}", 3)
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to remove [%s] %s', mac_address, e)
             return False
         else:
             res = self.process.expect(
@@ -155,7 +155,7 @@ class Bluetoothctl:
         try:
             self.send(f"connect {mac_address}", 2)
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to connect [%s] %s', mac_address, e)
             return False
         else:
             res = self.process.expect(
@@ -168,7 +168,7 @@ class Bluetoothctl:
         try:
             self.send(f"disconnect {mac_address}", 2)
         except Exception as e:
-            logger.error(e)
+            logger.error('Failed to disconnect [%s] %s', mac_address, e)
             return False
         else:
             res = self.process.expect(
