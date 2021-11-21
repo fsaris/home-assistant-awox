@@ -109,8 +109,7 @@ class AwoxMesh(DataUpdateCoordinator):
             async with async_timeout.timeout(10):
                 await self._disconnect_current_device()
 
-        if self._state['last_rssi_check'] is None \
-                or self._state['last_rssi_check'] < datetime.now() - timedelta(hours=24):
+        if self._state['last_rssi_check'] is None:
             try:
                 async with async_timeout.timeout(120):
                     # Scan for devices and get try to determine there RSSI
