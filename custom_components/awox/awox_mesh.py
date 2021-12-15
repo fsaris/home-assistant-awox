@@ -6,7 +6,8 @@ import queue
 import threading
 import time
 import re
-from datetime import datetime, timedelta
+import homeassistant.util.dt as dt_util
+from datetime import timedelta
 from homeassistant.core import HomeAssistant, callback, CALLBACK_TYPE
 from homeassistant.const import EVENT_HOMEASSISTANT_START, EVENT_HOMEASSISTANT_STOP
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -104,7 +105,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
         # Reconnect bluetooth every 2 ours to prevent connection freeze
         if self._state['last_connection'] is not None \
-                and self._state['last_connection'] < datetime.now() - timedelta(hours=2):
+                and self._state['last_connection'] < dt_util.now() - timedelta(hours=2):
             _LOGGER.info('async_update: Force disconnect to prevent connection freeze')
             async with async_timeout.timeout(10):
                 await self._disconnect_current_device()
@@ -136,7 +137,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
             # Force status update for specific mesh_id when no new update for the last minute
             if device_info['last_update'] is None \
-                    or device_info['last_update'] < datetime.now() - timedelta(seconds=60):
+                    or device_info['last_update'] < dt_util.now() - timedelta(seconds=60):
                 _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
 
                 async with async_timeout.timeout(20):
@@ -147,7 +148,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
             # Disable devices we didn't get a response the last 90 minutes
             if self._devices[mesh_id]['last_update'] is not None \
-                    and self._devices[mesh_id]['last_update'] < datetime.now() - timedelta(seconds=90):
+                    and self._devices[mesh_id]['last_update'] < dt_util.now() - timedelta(seconds=90):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
 
@@ -177,7 +178,7 @@ class AwoxMesh(DataUpdateCoordinator):
                       status['mesh_id'], self._devices[status['mesh_id']]['name'], status)
 
         self._devices[status['mesh_id']]['callback'](status)
-        self._devices[status['mesh_id']]['last_update'] = datetime.now()
+        self._devices[status['mesh_id']]['last_update'] = dt_util.now()
 
     async def async_on(self, mesh_id: int):
         await self._async_add_command_to_queue('on', {'dest': mesh_id})
@@ -311,7 +312,7 @@ class AwoxMesh(DataUpdateCoordinator):
                     if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
                         self._state['connected_device'] = device_info['name']
-                        self._state['last_connection'] = datetime.now()
+                        self._state['last_connection'] = dt_util.now()
                         await self._async_update_mesh_state()
                         _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
                         break
@@ -347,7 +348,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 _LOGGER.info('[%s][%s] Device NOT found during Bluetooth scan', device_info['mac'], device_info['name'])
                 self._devices[mesh_id]['rssi'] = -999999
 
-        self._state['last_rssi_check'] = datetime.now()
+        self._state['last_rssi_check'] = dt_util.now()
         await self._async_update_mesh_state()
 
         # Sort devices by rssi
