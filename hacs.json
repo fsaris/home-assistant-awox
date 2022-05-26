@@ -1,6 +1,5 @@
 {
   "name": "AwoX MESH control",
-  "domains": ["light"],
   "homeassistant": "2021.11.0",
   "render_readme": true,
   "iot_class": ["Local Push", "Local Polling"]
