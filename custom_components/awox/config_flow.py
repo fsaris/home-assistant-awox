@@ -15,8 +15,6 @@ from .scanner import DeviceScanner
 from .const import DOMAIN, CONF_MESH_NAME, CONF_MESH_PASSWORD, CONF_MESH_KEY
 from .awox_connect import AwoxConnect
 
-from bluepy.btle import BTLEManagementError
-
 _LOGGER = logging.getLogger(__name__)
 
 

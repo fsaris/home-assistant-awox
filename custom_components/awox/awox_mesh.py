@@ -124,7 +124,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
         # Not connected after executing command then we assume we could not connect to a device
         if not self.is_connected():
-            # Disable all when 2th run is also not successful
+            # Disable all when 2nd run is also not successful
             if not self.last_update_success:
                 self.update_status_of_all_devices_to_disabled()
 
@@ -164,7 +164,7 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             self._state['connected_device'] = None
 
-        for update_callback in self._listeners:
+        for update_callback in list(self._listeners):
             update_callback()
 
     @callback
