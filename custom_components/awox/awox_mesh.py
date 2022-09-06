@@ -164,8 +164,7 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             self._state['connected_device'] = None
 
-        for update_callback in list(self._listeners):
-            update_callback()
+        self.async_update_listeners()
 
     @callback
     def mesh_status_callback(self, status):
@@ -319,6 +318,7 @@ class AwoxMesh(DataUpdateCoordinator):
                     else:
                         _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
             except Exception as e:
+                _LOGGER.exception('exception %s', e)
                 _LOGGER.info('[%s][%s] Failed to connect, trying next device [%s]',
                                   device.mac, device_info['name'], e)
 
@@ -330,7 +330,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
     async def _async_get_devices_rssi(self):
         _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
-        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=40)
+        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=10)
 
         _LOGGER.debug('Scan result: %s', devices)
 

@@ -15,6 +15,7 @@ import pygatt
 import logging
 import struct
 import time
+import subprocess
 
 # Commands :
 
@@ -108,6 +109,13 @@ class AwoxAdapter(pygatt.GATTToolBackend):
 
         self._connected_device = AwoxDevice(address, self)
         return self._connected_device
+
+    def reset(self):
+        logger.info('reset bluetooth')
+        # subprocess.check_output("PATH=/usr/sbin:$PATH; rfkill unblock bluetooth", shell=True)
+        #
+        # subprocess.Popen(["systemctl", "restart", "bluetooth"]).wait()
+        # subprocess.Popen(["hciconfig", self._hci_device, "reset"]).wait()
 
 class AwoxDevice(GATTToolBLEDevice):
 
@@ -315,7 +323,8 @@ class AwoxMeshLight:
         try:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
             # return self.command_char.write(packet, withResponse=withResponse)
-            return self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
+            self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
+            return True
         except Exception as err:
 
         # except btle.BTLEDisconnectError as err:
