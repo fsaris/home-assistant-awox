@@ -501,6 +501,7 @@ class AwoxMeshLight:
         logger.debug("Disconnecting.")
         try:
             self.btdevice.disconnect()
+            self.adapter.stop()
         except Exception as err:
             logger.warning('Disconnect failed: %s', err)
             self.stop()
@@ -508,12 +509,11 @@ class AwoxMeshLight:
         self.session_key = None
 
     def stop(self):
-        logger.debug("force stoppping blue helper")
-        # try:
-        #     # self.adapter.connect()
-        #     # self.btdevice.stop()
-        # except Exception as err:
-        #     logger.warning('Stop failed: %s', err)
+        logger.debug("force stopping ble adapter")
+        try:
+            self.adapter.stop()
+        except Exception as err:
+            logger.warning('Stop failed: %s', err)
 
         self.session_key = None
 
