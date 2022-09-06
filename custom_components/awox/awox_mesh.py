@@ -106,7 +106,7 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.info('Registered [%s] %d', mac, mesh_id)
 
     def is_connected(self) -> bool:
-        return self._connected_bluetooth_device and self._connected_bluetooth_device.session_key
+        return self._connected_bluetooth_device and self._connected_bluetooth_device.is_connected
 
     async def _async_update_data(self):
 
