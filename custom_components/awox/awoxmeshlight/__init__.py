@@ -1,12 +1,21 @@
 from __future__ import unicode_literals
 
+import binascii
+from abc import ABC
+
+from pygatt import BLEAddressType
+from pygatt.backends.backend import DEFAULT_CONNECT_TIMEOUT_S
+from pygatt.backends.gatttool.device import GATTToolBLEDevice
+from pygatt.exceptions import NotificationTimeout, NotConnectedError
+
 from . import packetutils as pckt
 
 from os import urandom
-from bluepy import btle
+import pygatt
 import logging
 import struct
 import time
+import subprocess
 
 # Commands :
 
@@ -71,142 +80,61 @@ COMMAND_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1912'
 STATUS_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1911'
 OTA_CHAR_UUID = '00010203-0405-0607-0809-0a0b0c0d1913'
 
+
+FIRMWARE_REV_UUID = "0000{0:x}-0000-1000-8000-00805f9b34fb".format(0x2A26)
+HARDWARE_REV_UUID = "0000{0:x}-0000-1000-8000-00805f9b34fb".format(0x2A27)
+MODEL_NBR_UUID = "0000{0:x}-0000-1000-8000-00805f9b34fb".format(0x2A24)
+
 logger = logging.getLogger(__name__)
 
+class AwoxAdapter(pygatt.GATTToolBackend):
 
-class Peripheral(btle.Peripheral):
+    def connect(self, address, timeout=DEFAULT_CONNECT_TIMEOUT_S,
+                address_type=BLEAddressType.public, auto_reconnect=False):
+        logger.info('Connecting to %s with timeout=%s', address, timeout)
+        self.sendline('sec-level low')
+        self._address = address
+        self._auto_reconnect = auto_reconnect
 
-    def _connect(self, addr, addrType=btle.ADDR_TYPE_PUBLIC, iface=None, timeout=5):
-        """
-        Temporary manual patch see https://github.com/IanHarvey/bluepy/pull/434
-        also added a default `timeout` as this is not part yet of the release bluepy package
-        """
-        if len(addr.split(":")) != 6:
-            raise ValueError("Expected MAC address, got %s" % repr(addr))
-        if addrType not in (btle.ADDR_TYPE_PUBLIC, btle.ADDR_TYPE_RANDOM):
-            raise ValueError("Expected address type public or random, got {}".format(addrType))
-        self._startHelper(iface)
-        self.addr = addr
-        self.addrType = addrType
-        self.iface = iface
-        if iface is not None:
-            self._writeCmd("conn %s %s %s\n" % (addr, addrType, "hci"+str(iface)))
-        else:
-            self._writeCmd("conn %s %s\n" % (addr, addrType))
-        rsp = self._getResp('stat', timeout)
-        if rsp is None:
-            self._stopHelper()
-            raise btle.BTLEDisconnectError("Timed out while trying to connect to peripheral %s, addr type: %s" %
-                                      (addr, addrType), rsp)
-        while rsp and rsp['state'][0] == 'tryconn':
-            rsp = self._getResp('stat', timeout)
+        try:
+            cmd = 'connect {0} {1}'.format(self._address, address_type.name)
+            with self._receiver.event("connect", timeout):
+                self.sendline(cmd)
+        except NotificationTimeout:
+            message = "Timed out connecting to {0} after {1} seconds.".format(
+                self._address, timeout
+            )
+            logger.error(message)
+            raise NotConnectedError(message)
 
-        if rsp is None:
-            self._stopHelper()
-            raise btle.BTLEDisconnectError("Timed out while trying to connect to peripheral %s, addr type: %s" %
-                                      (addr, addrType), rsp)
+        self._connected_device = AwoxDevice(address, self)
+        return self._connected_device
 
-        if rsp['state'][0] != 'conn':
-            self._stopHelper()
-            raise btle.BTLEDisconnectError("Failed to connect to peripheral %s, addr type: %s [%s]" % (addr, addrType, rsp), rsp)
+    def reset(self):
+        logger.info('reset bluetooth')
+        # subprocess.check_output("PATH=/usr/sbin:$PATH; rfkill unblock bluetooth", shell=True)
+        #
+        # subprocess.Popen(["systemctl", "restart", "bluetooth"]).wait()
+        # subprocess.Popen(["hciconfig", self._hci_device, "reset"]).wait()
 
-    def _getResp(self, wantType, timeout=None):
-        """
-        Temporary manual patch see https://github.com/IanHarvey/bluepy/commit/b02b436cb5c71387bd70339a1b472b3a6bfe9ac8
-        """
-        # Temp set max timeout for wr commands (failsave)
-        if timeout is None and wantType == 'wr':
-            logger.debug('Set fallback time out - %s', wantType)
-            timeout = 10
+class AwoxDevice(GATTToolBLEDevice):
 
-        if isinstance(wantType, list) is not True:
-            wantType = [wantType]
+    def __init__(self, address, backend):
+        super(AwoxDevice, self).__init__(address, backend)
+        logger.debug(f'init connected?:{self._connected}')
 
-        while True:
-            resp = self._waitResp(wantType + ['ntfy', 'ind'], timeout)
-            if resp is None:
-                return None
+    def _notification_handles(self, uuid):
+        # Expect notifications on the value handle...
+        value_handle = self.get_handle(uuid)
+        logger.info('get handle')
+        # but write to the characteristic config to enable notifications
+        # TODO with the BGAPI backend we can be smarter and fetch the actual
+        # characteristic config handle - we can also do that with gattool if we
+        # use the 'desc' command, so we'll need to change the "get_handle" API
+        # to be able to get the value or characteristic config handle.
+        characteristic_config_handle = value_handle  # + 1
 
-            respType = resp['rsp'][0]
-            if respType == 'ntfy' or respType == 'ind':
-                hnd = resp['hnd'][0]
-                data = resp['d'][0]
-                if self.delegate is not None:
-                    self.delegate.handleNotification(hnd, data)
-            if respType not in wantType:
-                continue
-            return resp
-
-    def _waitResp(self, wantType, timeout=None):
-        while True:
-            if self._helper.poll() is not None:
-                raise btle.BTLEInternalError("Helper exited")
-
-            logger.debug("_waitResp - waiting for %s", wantType)
-
-            if timeout:
-                logger.debug("_waitResp - set timeout to %d seconds", timeout)
-                fds = self._poller.poll(timeout*1000)
-                if len(fds) == 0:
-                    logger.debug("_waitResp - timeout - no result received within timeout")
-                    return None
-
-            rv = self._helper.stdout.readline()
-            if rv.startswith('#') or rv == '\n' or len(rv)==0:
-                continue
-
-            resp = btle.BluepyHelper.parseResp(rv)
-            if 'rsp' not in resp:
-                raise btle.BTLEInternalError("No response type indicator", resp)
-
-            respType = resp['rsp'][0]
-            if respType in wantType:
-                logger.debug("_waitResp - resp [%s]", resp)
-                return resp
-            elif respType == 'stat':
-                if 'state' in resp and len(resp['state']) > 0 and resp['state'][0] == 'disc':
-                    self._stopHelper()
-                    raise btle.BTLEDisconnectError("Device disconnected", resp)
-            elif respType == 'err':
-                errcode=resp['code'][0]
-                if errcode=='nomgmt':
-                    raise btle.BTLEManagementError("Management not available (permissions problem?)", resp)
-                elif errcode=='atterr':
-                    raise btle.BTLEGattError("Bluetooth command failed", resp)
-                else:
-                    raise btle.BTLEException("Error from bluepy-helper (%s)" % errcode, resp)
-            elif respType == 'scan':
-                # Scan response when we weren't interested. Ignore it
-                continue
-            else:
-                raise btle.BTLEInternalError("Unexpected response (%s)" % respType, resp)
-
-    def stop(self):
-        self._stopHelper()
-
-
-class Delegate(btle.DefaultDelegate):
-    def __init__(self, light):
-        self.light = light
-        btle.DefaultDelegate.__init__(self)
-
-    def handleNotification(self, cHandle, data):
-
-        if self.light.session_key is None:
-            logger.info(
-                "Device [%s] is disconnected, ignoring received notification [unable to decrypt without active session]",
-                self.light.mac)
-            return
-
-        message = pckt.decrypt_packet(self.light.session_key, self.light.mac, data)
-        if message is None:
-            logger.warning("Failed to decrypt package [key: %s, data: %s]", self.light.session_key, data)
-            return
-
-        logger.debug("Received notification %s", message)
-
-        self.light.parseStatusResult(message)
-
+        return value_handle, characteristic_config_handle
 
 class AwoxMeshLight:
     def __init__(self, mac, mesh_name="unpaired", mesh_password="1234", mesh_id=0):
@@ -219,7 +147,8 @@ class AwoxMeshLight:
         """
         self.mac = mac
         self.mesh_id = mesh_id
-        self.btdevice = Peripheral()
+        self.adapter = None
+        self.btdevice = None
         self.session_key = None
 
         self.command_char = None
@@ -252,17 +181,41 @@ class AwoxMeshLight:
         assert len(self.mesh_name) <= 16, "mesh_name can hold max 16 bytes"
         assert len(self.mesh_password) <= 16, "mesh_password can hold max 16 bytes"
 
-        self.btdevice.connect(self.mac)
-        self.btdevice.setDelegate(Delegate(self))
-        pair_char = self.btdevice.getCharacteristics(uuid=PAIR_CHAR_UUID)[0]
+        def handleNotification(cHandle, data):
+
+            if self.session_key is None:
+                logger.info(
+                    "Device [%s] is disconnected, ignoring received notification [unable to decrypt without active session]",
+                    self.mac)
+                return
+
+            message = pckt.decrypt_packet(self.session_key, self.mac, data)
+            if message is None:
+                logger.warning("Failed to decrypt package [key: %s, data: %s]", self.session_key, data)
+                return
+
+            logger.debug("Received notification %s", message)
+
+            self.parseStatusResult(message)
+
+        self.adapter = AwoxAdapter()
+        # self.adapter = pygatt.GATTToolBackend()
+        self.adapter.start()
+        self.btdevice = self.adapter.connect(self.mac, timeout=10)
+        # AwoxDevice(self.adapter._address, self.adapter)
+        # pygatt.exceptions.NotConnectedError
+
+        # pair_char = self.btdevice.getCharacteristics(uuid=PAIR_CHAR_UUID)[0]
         self.session_random = urandom(8)
         message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, self.session_random)
-        pair_char.write(message)
+        # pair_char.write(message)
+        logger.info(f'send pair message {message}')
+        self.btdevice.char_write(PAIR_CHAR_UUID, message)
 
-        self.status_char = self.btdevice.getCharacteristics(uuid=STATUS_CHAR_UUID)[0]
-        self.status_char.write(b'\x01')
+        logger.info('read pair value')
+        reply = self.btdevice.char_read_handle('1b')
+        logger.debug(f"Read {reply} from characteristic {PAIR_CHAR_UUID}")
 
-        reply = bytearray(pair_char.read())
         if reply[0] == 0xd:
             self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, self.session_random, reply[1:9])
         else:
@@ -273,21 +226,15 @@ class AwoxMeshLight:
             self.disconnect()
             return False
 
+
+        logger.info('listen for notifications')
+        self.btdevice.subscribe(STATUS_CHAR_UUID, callback=handleNotification)
+
+        logger.info('send status message')
+        self.btdevice.char_write(STATUS_CHAR_UUID, b'\x01')
+
         return True
 
-    def waitForNotifications(self):
-        session_key = self.session_key
-        logger.info('[%s] Started waitForNotifications', self.mac)
-        while self.session_key == session_key:
-            try:
-                self.btdevice.waitForNotifications(5)
-            except btle.BTLEDisconnectError:
-                self.session_key = None
-            except Exception as error:
-                logger.debug("waitForNotifications error - %s", error)
-                # If we get the response to a write then we'll break
-                pass
-        logger.info('[%s] WaitForNotifications done', self.mac)
 
     def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
         """
@@ -301,7 +248,7 @@ class AwoxMeshLight:
         while (not connected and attempts < num_tries):
             try:
                 connected = self.connect(mesh_name, mesh_password)
-            except btle.BTLEDisconnectError:
+            except Exception:
                 logger.info("connection_error: retrying for %s time", attempts)
             finally:
                 attempts += 1
@@ -325,29 +272,20 @@ class AwoxMeshLight:
         assert len(new_mesh_password.encode()) <= 16, "new_mesh_password can hold max 16 bytes"
         assert len(new_mesh_long_term_key.encode()) <= 16, "new_mesh_long_term_key can hold max 16 bytes"
 
-        pair_char = self.btdevice.getCharacteristics(uuid=PAIR_CHAR_UUID)[0]
-
-        # FIXME : Removing the delegate as a workaround to a bluepy.btle.BTLEException
-        #         similar to https://github.com/IanHarvey/bluepy/issues/182 That may be
-        #         a bluepy bug or I'm using it wrong or both ...
-        self.btdevice.setDelegate(None)
-
         message = pckt.encrypt(self.session_key, new_mesh_name.encode())
         message.insert(0, 0x4)
-        pair_char.write(message)
+        self.btdevice.char_write(PAIR_CHAR_UUID, message, wait_for_response=True)
 
         message = pckt.encrypt(self.session_key, new_mesh_password.encode())
         message.insert(0, 0x5)
-        pair_char.write(message)
+        self.btdevice.char_write(PAIR_CHAR_UUID, message, wait_for_response=True)
 
         message = pckt.encrypt(self.session_key, new_mesh_long_term_key.encode())
         message.insert(0, 0x6)
-        pair_char.write(message)
+        self.btdevice.char_write(PAIR_CHAR_UUID, message, wait_for_response=True)
 
         time.sleep(1)
-        reply = bytearray(pair_char.read())
-
-        self.btdevice.setDelegate(Delegate(self))
+        reply = bytearray(self.btdevice.char_read(PAIR_CHAR_UUID))
 
         if reply[0] == 0x7:
             self.mesh_name = new_mesh_name.encode()
@@ -383,21 +321,22 @@ class AwoxMeshLight:
         packet = pckt.make_command_packet(self.session_key, self.mac, dest, command, data)
 
         try:
-            if not self.command_char:
-                self.command_char = self.btdevice.getCharacteristics(uuid=COMMAND_CHAR_UUID)[0]
-
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
-            return self.command_char.write(packet, withResponse=withResponse)
-        except btle.BTLEDisconnectError as err:
+            # return self.command_char.write(packet, withResponse=withResponse)
+            self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
+            return True
+        except Exception as err:
+
+        # except btle.BTLEDisconnectError as err:
             logger.error('Command failed, device is disconnected: %s', err)
             self.session_key = None
             raise err
-        except btle.BTLEInternalError as err:
-            if 'Helper not started' in str(err):
-                logger.error('Command failed, Helper not started, device is disconnected: %s', err)
-                self.session_key = None
-            else:
-                logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
+        # except btle.BTLEInternalError as err:
+        #     if 'Helper not started' in str(err):
+        #         logger.error('Command failed, Helper not started, device is disconnected: %s', err)
+        #         self.session_key = None
+        #     else:
+        #         logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
 
     def resetMesh(self):
         """
@@ -562,6 +501,7 @@ class AwoxMeshLight:
         logger.debug("Disconnecting.")
         try:
             self.btdevice.disconnect()
+            self.adapter.stop()
         except Exception as err:
             logger.warning('Disconnect failed: %s', err)
             self.stop()
@@ -569,9 +509,9 @@ class AwoxMeshLight:
         self.session_key = None
 
     def stop(self):
-        logger.debug("force stoppping blue helper")
+        logger.debug("force stopping ble adapter")
         try:
-            self.btdevice.stop()
+            self.adapter.stop()
         except Exception as err:
             logger.warning('Stop failed: %s', err)
 
@@ -582,56 +522,18 @@ class AwoxMeshLight:
         Returns :
             The firmware version as a null terminated utf-8 string.
         """
-        char = self.btdevice.getCharacteristics(uuid=btle.AssignedNumbers.firmwareRevisionString)[0]
-        return char.read()
+        return self.btdevice.char_read(uuid=FIRMWARE_REV_UUID)
 
     def getHardwareRevision(self):
         """
         Returns :
             The hardware version as a null terminated utf-8 string.
         """
-        char = self.btdevice.getCharacteristics(uuid=btle.AssignedNumbers.hardwareRevisionString)[0]
-        return char.read()
+        return self.btdevice.char_read(uuid=HARDWARE_REV_UUID)
 
     def getModelNumber(self):
         """
         Returns :
             The model as a null terminated utf-8 string.
         """
-        char = self.btdevice.getCharacteristics(uuid=btle.AssignedNumbers.modelNumberString)[0]
-        return char.read()
-
-    def sendFirmware(self, firmware_path):
-        """
-        Updates the light bulb's firmware. The light will blink green after receiving the new
-        firmware.
-
-        Args:
-            firmware_path: The path of the firmware file.
-        """
-        assert (self.session_key)
-
-        with open(firmware_path, 'rb') as firmware_file:
-            firmware_data = firmware_file.read()
-
-        if not firmware_data:
-            return
-
-        ota_char = self.btdevice.getCharacteristics(uuid=OTA_CHAR_UUID)[0]
-        count = 0
-        for i in range(0, len(firmware_data), 0x10):
-            data = struct.pack('<H', count) + firmware_data[i:i + 0x10].ljust(0x10, b'\xff')
-            crc = pckt.crc16(data)
-            packet = data + struct.pack('<H', crc)
-            logger.debug("Writing packet %i of %i : %s", count + 1, len(firmware_data) / 0x10 + 1, repr(packet))
-            ota_char.write(packet)
-            # FIXME : When calling write with withResponse=True bluepy hangs after a few packets.
-            #         Without any delay the light blinks once without accepting the firmware.
-            #         The choosen value is arbitrary.
-            time.sleep(0.01)
-            count += 1
-        data = struct.pack('<H', count)
-        crc = pckt.crc16(data)
-        packet = data + struct.pack('<H', crc)
-        logger.debug("Writing last packet : %s", repr(packet))
-        ota_char.write(packet)
+        return self.btdevice.char_read(uuid=MODEL_NBR_UUID)
