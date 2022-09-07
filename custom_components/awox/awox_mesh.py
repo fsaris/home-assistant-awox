@@ -174,7 +174,8 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             self._state['connected_device'] = None
 
-        self.async_update_listeners()
+        for update_callback in list(self._listeners):
+            update_callback()
 
     @callback
     def mesh_status_callback(self, status):
@@ -263,20 +264,26 @@ class AwoxMesh(DataUpdateCoordinator):
             command = self._queue.get()
             _LOGGER.debug('process 0/%d - %s', self._queue.qsize(), command)
 
-            try:
-                tries = 0
-                while not self._call_command(command) and tries < 3:
-                    tries = tries + 1
-                    _LOGGER.warning('Command failed, retry %s', tries)
+            if command['command'] == 'requestStatusUpdates':
+                if self.is_connected():
+                    asyncio.run_coroutine_threadsafe(
+                        self._connected_bluetooth_device.requestStatusUpdates(), self.hass.loop
+                    ).result()
+            else:
+                try:
+                    tries = 0
+                    while not self._call_command(command) and tries < 3:
+                        tries = tries + 1
+                        _LOGGER.warning('Command failed, retry %s', tries)
 
-            except Exception as e:
-                _LOGGER.exception('Command failed and skipped - %s', e)
-                asyncio.run_coroutine_threadsafe(
-                    self._disconnect_current_device(), self.hass.loop
-                ).result()
+                except Exception as e:
+                    _LOGGER.exception('Command failed and skipped - %s', e)
+                    asyncio.run_coroutine_threadsafe(
+                        self._disconnect_current_device(), self.hass.loop
+                    ).result()
 
-            if 'callback' in command:
-                command['callback']()
+                if 'callback' in command:
+                    command['callback']()
 
             self._queue.task_done()
 
