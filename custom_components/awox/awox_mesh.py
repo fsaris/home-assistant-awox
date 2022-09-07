@@ -164,7 +164,8 @@ class AwoxMesh(DataUpdateCoordinator):
         if not self.is_connected():
             self._state['connected_device'] = None
 
-        self.async_update_listeners()
+        for update_callback in list(self._listeners):
+            update_callback()
 
     @callback
     def mesh_status_callback(self, status):
