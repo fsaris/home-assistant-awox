@@ -515,7 +515,3 @@ class AwoxMeshLight:
             The model as a null terminated utf-8 string.
         """
         return await self._client.read_gatt_char(MODEL_NBR_UUID)
-
-    @property
-    def is_connected(self) -> bool:
-        return self._client and self._client.is_connected and self.session_key
