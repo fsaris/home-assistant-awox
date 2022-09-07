@@ -6,7 +6,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from .awoxmeshlight import AwoxMeshLight
 # import awoxmeshlight from .awoxmeshlight
-from bleak import discover
+from .bluetoothctl import Bluetoothctl
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,25 +31,26 @@ class DeviceScanner:
 
     @staticmethod
     async def async_find_devices(hass: HomeAssistant, scan_timeout: int = 30):
-
+        def init():
+            return Bluetoothctl()
         devices = {}
+
         try:
+            bl = await hass.async_add_executor_job(init)
             _LOGGER.info("Scanning %d seconds for AwoX bluetooth mesh devices!", scan_timeout)
+            await hass.async_add_executor_job(bl.start_scan)
+            await asyncio.sleep(scan_timeout)
 
-            discovered = await asyncio.wait_for(
-                discover(timeout=scan_timeout), scan_timeout * 2)
+            for mac, dev in (await hass.async_add_executor_job(bl.get_available_devices)).items():
+                if mac.startswith(START_MAC_ADDRESS):
+                    devices[mac] = dev
 
-            _LOGGER.debug('Found ble devices: %s', discovered)
+            _LOGGER.debug('Found devices: %s', devices)
 
-            for device in discovered:
-                if device.address.startswith(START_MAC_ADDRESS):
-                    devices[device.address] = {
-                        'mac': device.address,
-                        'rssi': device.rssi,
-                        'name': device.name
-                        }
+            await hass.async_add_executor_job(bl.stop_scan)
 
-            _LOGGER.debug('Found awox devices: %s', devices)
+            async with async_timeout.timeout(10):
+                await hass.async_add_executor_job(bl.shutdown)
 
         except Exception as e:
             _LOGGER.exception('Find devices process error: %s', e)

@@ -58,16 +58,6 @@ class AwoxMesh(DataUpdateCoordinator):
         self._command_tread.daemon = True
         self._command_tread.start()
 
-        def requestStatusThread():
-            asyncio.run_coroutine_threadsafe(
-                self._request_status_updates(), self.hass.loop
-            ).result()
-
-        self._status_thread = threading.Thread(target=requestStatusThread,
-                                               name="AwoxMeshStatusUpdate-" + self._mesh_name)
-        self._status_thread.daemon = True
-        self._status_thread.start()
-
         def startup(event):
             _LOGGER.debug('startup')
             asyncio.run_coroutine_threadsafe(
@@ -215,7 +205,7 @@ class AwoxMesh(DataUpdateCoordinator):
             device = self._connected_bluetooth_device
             self._connected_bluetooth_device = None
             async with async_timeout.timeout(10):
-                await device.disconnect()
+                await self.hass.async_add_executor_job(device.disconnect)
         except Exception as e:
             _LOGGER.exception('Failed to disconnect [%s]', e)
 
@@ -247,43 +237,26 @@ class AwoxMesh(DataUpdateCoordinator):
         while not done:
             await asyncio.sleep(.01)
 
-    async def _request_status_updates(self):
-        while not self._shutdown:
-            if self.is_connected():
-                try:
-                    await self._connected_bluetooth_device.requestStatusUpdates()
-                except Exception as e:
-                    _LOGGER.warning(f"Failed to requestStatusUpdates: {e}")
-
-            await asyncio.sleep(30)
-
     def _process_command_queue(self):
         while not self._shutdown:
 
             _LOGGER.debug('get item from queue')
             command = self._queue.get()
             _LOGGER.debug('process 0/%d - %s', self._queue.qsize(), command)
+            try:
+                tries = 0
+                while not self._call_command(command) and tries < 3:
+                    tries = tries + 1
+                    _LOGGER.warning('Command failed, retry %s', tries)
 
-            if command['command'] == 'requestStatusUpdates':
-                if self.is_connected():
-                    asyncio.run_coroutine_threadsafe(
-                        self._connected_bluetooth_device.requestStatusUpdates(), self.hass.loop
-                    ).result()
-            else:
-                try:
-                    tries = 0
-                    while not self._call_command(command) and tries < 3:
-                        tries = tries + 1
-                        _LOGGER.warning('Command failed, retry %s', tries)
+            except Exception as e:
+                _LOGGER.exception('Command failed and skipped - %s', e)
+                asyncio.run_coroutine_threadsafe(
+                    self._disconnect_current_device(), self.hass.loop
+                ).result()
 
-                except Exception as e:
-                    _LOGGER.exception('Command failed and skipped - %s', e)
-                    asyncio.run_coroutine_threadsafe(
-                        self._disconnect_current_device(), self.hass.loop
-                    ).result()
-
-                if 'callback' in command:
-                    command['callback']()
+            if 'callback' in command:
+                command['callback']()
 
             self._queue.task_done()
 
@@ -298,15 +271,9 @@ class AwoxMesh(DataUpdateCoordinator):
         try:
             # Call command
             if isinstance(command['params'], tuple):
-                result = asyncio.run_coroutine_threadsafe(
-                    getattr(self._connected_bluetooth_device, command['command'])(*command['params']),
-                    self.hass.loop
-                ).result()
+                result = getattr(self._connected_bluetooth_device, command['command'])(*command['params'])
             else:
-                result = asyncio.run_coroutine_threadsafe(
-                    getattr(self._connected_bluetooth_device, command['command'])(**command['params']),
-                    self.hass.loop
-                ).result()
+                result = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
         except Exception as e:
             _LOGGER.warning('Command failed, re-connecting for new attempt - %s', e)
             result = None
@@ -342,13 +309,12 @@ class AwoxMesh(DataUpdateCoordinator):
             try:
                 _LOGGER.info("[%s][%s] Trying to connect", device.mac, device_info['name'])
                 async with async_timeout.timeout(10):
-                    if await device.connect():
-                        _LOGGER.debug("[%s][%s] Connected", device.mac, device_info['name'])
+                    if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
                         self._state['connected_device'] = device_info['name']
                         self._state['last_connection'] = dt_util.now()
                         await self._async_update_mesh_state()
-                        _LOGGER.info("[%s][%s] Connected and updated mesh", device.mac, device_info['name'])
+                        _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
                         break
                     else:
                         _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
@@ -357,14 +323,14 @@ class AwoxMesh(DataUpdateCoordinator):
                                   device.mac, device_info['name'], e)
 
             _LOGGER.debug('[%s][%s] Setting up Bluetooth connection failed, making sure Bluetooth device stops trying', device.mac, device_info['name'])
-            await device.disconnect()
+            await self.hass.async_add_executor_job(device.stop)
 
         if self._connected_bluetooth_device is not None:
             self._connected_bluetooth_device.status_callback = self.mesh_status_callback
 
     async def _async_get_devices_rssi(self):
         _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
-        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=20)
+        devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=40)
 
         _LOGGER.debug('Scan result: %s', devices)
 
