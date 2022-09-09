@@ -308,7 +308,7 @@ class AwoxMesh(DataUpdateCoordinator):
             device = AwoxMeshLight(device_info['mac'], self._mesh_name, self._mesh_password, mesh_id)
             try:
                 _LOGGER.info("[%s][%s] Trying to connect", device.mac, device_info['name'])
-                async with async_timeout.timeout(10):
+                async with async_timeout.timeout(20):
                     if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
                         self._state['connected_device'] = device_info['name']

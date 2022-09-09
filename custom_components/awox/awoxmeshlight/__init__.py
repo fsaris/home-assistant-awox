@@ -201,7 +201,7 @@ class AwoxMeshLight:
         self.adapter = AwoxAdapter()
         # self.adapter = pygatt.GATTToolBackend()
         self.adapter.start()
-        self.btdevice = self.adapter.connect(self.mac, timeout=10)
+        self.btdevice = self.adapter.connect(self.mac, timeout=15)
         # AwoxDevice(self.adapter._address, self.adapter)
         # pygatt.exceptions.NotConnectedError
 
