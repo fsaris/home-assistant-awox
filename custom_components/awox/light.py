@@ -17,10 +17,7 @@ from homeassistant.components.light import (
     ATTR_COLOR_TEMP,
     ATTR_RGB_COLOR,
     LightEntity,
-    COLOR_MODE_ONOFF,
-    COLOR_MODE_BRIGHTNESS,
-    COLOR_MODE_COLOR_TEMP,
-    COLOR_MODE_RGB
+    ColorMode
 )
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -62,16 +59,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             type_string = device['type']
 
         if 'color' in type_string:
-            supported_color_modes.add(COLOR_MODE_RGB)
+            supported_color_modes.add(ColorMode.RGB)
 
         if 'temperature' in type_string:
-            supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+            supported_color_modes.add(ColorMode.COLOR_TEMP)
 
         if 'dimming' in type_string:
-            supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+            supported_color_modes.add(ColorMode.BRIGHTNESS)
 
         if len(supported_color_modes) == 0:
-            supported_color_modes.add(COLOR_MODE_ONOFF)
+            supported_color_modes.add(ColorMode.ONOFF)
 
         light = AwoxLight(mesh, device[CONF_MAC], device[CONF_MESH_ID], device[CONF_NAME], supported_color_modes,
                           device[CONF_MANUFACTURER], device[CONF_MODEL], device[CONF_FIRMWARE])
@@ -173,7 +170,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
     @property
     def brightness(self):
         """Return the brightness of the light."""
-        if self.color_mode != COLOR_MODE_RGB:
+        if self.color_mode != ColorMode.RGB:
             if self._white_brightness is None:
                 return None
             return convert_value_to_available_range(self._white_brightness, int(1), int(0x7f), 0, 255)
@@ -214,7 +211,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
         if ATTR_BRIGHTNESS in kwargs:
             status['state'] = True
-            if self.color_mode != COLOR_MODE_RGB:
+            if self.color_mode != ColorMode.RGB:
                 device_brightness = convert_value_to_available_range(kwargs[ATTR_BRIGHTNESS], 0, 255, int(1), int(0x7f))
                 await self._mesh.async_set_white_brightness(self._mesh_id, device_brightness)
                 status['white_brightness'] = device_brightness
@@ -261,13 +258,13 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
         if 'color_mode' in status:
             supported_color_modes = self.supported_color_modes
-            color_mode = COLOR_MODE_ONOFF
+            color_mode = ColorMode.ONOFF
             if status['color_mode']:
-                color_mode = COLOR_MODE_RGB
-            elif COLOR_MODE_COLOR_TEMP in supported_color_modes:
-                color_mode = self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-            elif COLOR_MODE_BRIGHTNESS in supported_color_modes:
-                color_mode = self._attr_color_mode = COLOR_MODE_BRIGHTNESS
+                color_mode = ColorMode.RGB
+            elif ColorMode.COLOR_TEMP in supported_color_modes:
+                color_mode = self._attr_color_mode = ColorMode.COLOR_TEMP
+            elif ColorMode.BRIGHTNESS in supported_color_modes:
+                color_mode = self._attr_color_mode = ColorMode.BRIGHTNESS
             self._attr_color_mode = color_mode
 
         _LOGGER.debug('[%s][%s] mode[%s] Status callback: %s', self.unique_id, self.name, self._attr_color_mode, status)
