@@ -9,7 +9,7 @@ import re
 import homeassistant.util.dt as dt_util
 from datetime import timedelta
 from homeassistant.core import HomeAssistant, callback, CALLBACK_TYPE
-from homeassistant.const import EVENT_HOMEASSISTANT_START, EVENT_HOMEASSISTANT_STOP
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, EVENT_HOMEASSISTANT_STOP
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 # import awoxmeshlight from .awoxmeshlight
@@ -70,7 +70,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 self.async_shutdown(), hass.loop
             ).result()
 
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, startup)
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, startup)
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, shutdown)
 
     @property
@@ -90,7 +90,8 @@ class AwoxMesh(DataUpdateCoordinator):
             'mac': mac,
             'name': name,
             'callback': callback_func,
-            'last_update': None
+            'last_update': None,
+            'update_count': 0
         }
 
         _LOGGER.info('Registered [%s] %d', mac, mesh_id)
@@ -135,6 +136,8 @@ class AwoxMesh(DataUpdateCoordinator):
 
         for mesh_id, device_info in self._devices.items():
 
+            _LOGGER.debug(f'[{self.mesh_name}][{device_info["name"]}] update count: {device_info["update_count"]}; last update: {device_info["last_update"]}')
+
             # Force status update for specific mesh_id when no new update for the last minute
             if device_info['last_update'] is None \
                     or device_info['last_update'] < dt_util.now() - timedelta(seconds=60):
@@ -146,11 +149,12 @@ class AwoxMesh(DataUpdateCoordinator):
                 # Give mesh time to gather status updates
                 await asyncio.sleep(.5)
 
-            # Disable devices we didn't get a response the last 90 minutes
+            # Disable devices we didn't get a response the last 90 seconds
             if self._devices[mesh_id]['last_update'] is not None \
                     and self._devices[mesh_id]['last_update'] < dt_util.now() - timedelta(seconds=90):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
+                self._devices[mesh_id]['update_count'] = 0
 
         return self._state
 
@@ -159,12 +163,13 @@ class AwoxMesh(DataUpdateCoordinator):
             if device_info['last_update'] is not None:
                 device_info['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
+                self._devices[mesh_id]['update_count'] = 0
 
     async def _async_update_mesh_state(self):
         if not self.is_connected():
             self._state['connected_device'] = None
 
-        for update_callback in list(self._listeners):
+        for update_callback, _ in list(self._listeners.values()):
             update_callback()
 
     @callback
@@ -177,8 +182,15 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.debug('[%d][%s] mesh_status_callback(%s)',
                       status['mesh_id'], self._devices[status['mesh_id']]['name'], status)
 
+        if status['type'] != 'status':
+            _LOGGER.debug('[%d][%s] skipping all non status callbacks',
+                      status['mesh_id'], self._devices[status['mesh_id']]['name'])
+            return
+
         self._devices[status['mesh_id']]['callback'](status)
+
         self._devices[status['mesh_id']]['last_update'] = dt_util.now()
+        self._devices[status['mesh_id']]['update_count'] += 1
 
     async def async_on(self, mesh_id: int):
         await self._async_add_command_to_queue('on', {'dest': mesh_id})

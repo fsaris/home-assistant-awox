@@ -337,6 +337,7 @@ class AwoxMeshLight:
             white_brightness, white_temperature = struct.unpack('BB', data[11:13])
             color_brightness, red, green, blue = struct.unpack('BBBB', data[13:17])
             status = {
+                'type': 'status',
                 'mesh_id': mesh_id,
                 'state': (mode & 1) == 1,
                 'color_mode': ((mode >> 1) & 1) == 1,
@@ -356,6 +357,7 @@ class AwoxMeshLight:
             color_brightness, red, green, blue = struct.unpack('BBBB', data[15:19])
 
             status = {
+                'type': 'notification',
                 'mesh_id': mesh_id,
                 'state': (mode & 1) == 1,
                 'color_mode': ((mode >> 1) & 1) == 1,
@@ -371,7 +373,7 @@ class AwoxMeshLight:
         if status:
             logger.debug('parsed status %s', status)
         else:
-            logger.info('Unknown command [%d]', command)
+            logger.error('Unknown command [%d]', command)
 
         if status and status['mesh_id'] == self.mesh_id:
             logger.info('Update device status - mesh_id %d', status['mesh_id'])
