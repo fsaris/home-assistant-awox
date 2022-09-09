@@ -111,11 +111,8 @@ class AwoxAdapter(pygatt.GATTToolBackend):
         return self._connected_device
 
     def reset(self):
-        logger.info('reset bluetooth')
-        # subprocess.check_output("PATH=/usr/sbin:$PATH; rfkill unblock bluetooth", shell=True)
-        #
-        # subprocess.Popen(["systemctl", "restart", "bluetooth"]).wait()
-        # subprocess.Popen(["hciconfig", self._hci_device, "reset"]).wait()
+        # skip resetting
+        return
 
 class AwoxDevice(GATTToolBLEDevice):
 
@@ -126,13 +123,9 @@ class AwoxDevice(GATTToolBLEDevice):
     def _notification_handles(self, uuid):
         # Expect notifications on the value handle...
         value_handle = self.get_handle(uuid)
-        logger.info('get handle')
-        # but write to the characteristic config to enable notifications
-        # TODO with the BGAPI backend we can be smarter and fetch the actual
-        # characteristic config handle - we can also do that with gattool if we
-        # use the 'desc' command, so we'll need to change the "get_handle" API
-        # to be able to get the value or characteristic config handle.
-        characteristic_config_handle = value_handle  # + 1
+
+        # Awox/Eglo devices use the same handle to read/write and trigger notifications
+        characteristic_config_handle = value_handle
 
         return value_handle, characteristic_config_handle
 
@@ -199,16 +192,12 @@ class AwoxMeshLight:
             self.parseStatusResult(message)
 
         self.adapter = AwoxAdapter()
-        # self.adapter = pygatt.GATTToolBackend()
         self.adapter.start()
         self.btdevice = self.adapter.connect(self.mac, timeout=15)
-        # AwoxDevice(self.adapter._address, self.adapter)
-        # pygatt.exceptions.NotConnectedError
 
-        # pair_char = self.btdevice.getCharacteristics(uuid=PAIR_CHAR_UUID)[0]
         self.session_random = urandom(8)
         message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, self.session_random)
-        # pair_char.write(message)
+
         logger.info(f'send pair message {message}')
         self.btdevice.char_write(PAIR_CHAR_UUID, message)
 
@@ -227,10 +216,10 @@ class AwoxMeshLight:
             return False
 
 
-        logger.info('listen for notifications')
+        logger.debug('listen for notifications')
         self.btdevice.subscribe(STATUS_CHAR_UUID, callback=handleNotification)
 
-        logger.info('send status message')
+        logger.debug('send status message')
         self.btdevice.char_write(STATUS_CHAR_UUID, b'\x01')
 
         return True
@@ -322,21 +311,12 @@ class AwoxMeshLight:
 
         try:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
-            # return self.command_char.write(packet, withResponse=withResponse)
             self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
             return True
         except Exception as err:
-
-        # except btle.BTLEDisconnectError as err:
             logger.error('Command failed, device is disconnected: %s', err)
             self.session_key = None
             raise err
-        # except btle.BTLEInternalError as err:
-        #     if 'Helper not started' in str(err):
-        #         logger.error('Command failed, Helper not started, device is disconnected: %s', err)
-        #         self.session_key = None
-        #     else:
-        #         logger.exception('Command response failed to be correctly processed but we ignore it for now: %s', err)
 
     def resetMesh(self):
         """
