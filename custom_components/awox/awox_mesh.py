@@ -91,13 +91,17 @@ class AwoxMesh(DataUpdateCoordinator):
             'name': name,
             'callback': callback_func,
             'last_update': None,
-            'update_count': 0
+            'update_count': 0,
+            'status_request_count': 0
         }
 
-        _LOGGER.info('Registered [%s] %d', mac, mesh_id)
+        _LOGGER.info('[%s] Registered [%s] %d', self.mesh_name, mac, mesh_id)
 
     def is_connected(self) -> bool:
-        return self._connected_bluetooth_device and self._connected_bluetooth_device.session_key
+        return self._connected_bluetooth_device and self._connected_bluetooth_device.isconnected
+
+    def is_reconnecting(self) -> bool:
+        return self._connected_bluetooth_device and self._connected_bluetooth_device.reconnecting
 
     async def _async_update_data(self):
 
@@ -117,11 +121,13 @@ class AwoxMesh(DataUpdateCoordinator):
                     # Scan for devices and get try to determine there RSSI
                     await self._async_get_devices_rssi()
             except Exception as e:
-                _LOGGER.warning('Fetching RSSI failed - %s', e)
+                _LOGGER.warning('[%s] Fetching RSSI failed - [%s] %s', self.mesh_name, type(e).__name__, e)
 
-        _LOGGER.info('async_update: Request status')
-        async with async_timeout.timeout(20):
-            await self._async_add_command_to_queue('requestStatus', {'dest': 0xffff, 'withResponse': True})
+        try:
+            async with async_timeout.timeout(20):
+                await self._async_add_command_to_queue('requestStatus', {'dest': 0xffff, 'withResponse': True})
+        except Exception as e:
+            _LOGGER.warning('[%s] Requesting status failed - [%s] %s', self.mesh_name, type(e).__name__, e)
 
         # Not connected after executing command then we assume we could not connect to a device
         if not self.is_connected():
@@ -129,20 +135,21 @@ class AwoxMesh(DataUpdateCoordinator):
             if not self.last_update_success:
                 self.update_status_of_all_devices_to_disabled()
 
-            raise UpdateFailed("No device connected")
+            raise UpdateFailed('Reconnecting to BLE device' if self.is_reconnecting() else 'No device connected')
 
         # Give mesh time to gather status updates
         await asyncio.sleep(.5)
 
         for mesh_id, device_info in self._devices.items():
 
-            _LOGGER.debug(f'[{self.mesh_name}][{device_info["name"]}] update count: {device_info["update_count"]}; last update: {device_info["last_update"]}')
+            _LOGGER.debug(f'[{self.mesh_name}][{device_info["name"]}] update count: {device_info["update_count"]}; request count: {device_info["status_request_count"]}; last update: {device_info["last_update"]}')
 
             # Force status update for specific mesh_id when no new update for the last minute
             if device_info['last_update'] is None \
                     or device_info['last_update'] < dt_util.now() - timedelta(seconds=60):
-                _LOGGER.info('async_update: Requested status of [%d] %s', mesh_id, device_info['name'])
+                _LOGGER.info('[%s][%s][%d] async_update: Requested status of', self.mesh_name, device_info['name'], mesh_id)
 
+                self._devices[mesh_id]['status_request_count'] += 1
                 async with async_timeout.timeout(20):
                     await self._async_add_command_to_queue('requestStatus', {'dest': mesh_id, 'withResponse': True}, True)
 
@@ -175,16 +182,16 @@ class AwoxMesh(DataUpdateCoordinator):
     @callback
     def mesh_status_callback(self, status):
         if 'mesh_id' not in status or status['mesh_id'] not in self._devices:
-            _LOGGER.info('Status feedback of unknown device - [%s]',
-                         status['mesh_id'] if 'mesh_id' in status else 'unknown')
+            _LOGGER.info('[%s] Status feedback of unknown device - [%s]',
+                         self.mesh_name, status['mesh_id'] if 'mesh_id' in status else 'unknown')
             return
 
-        _LOGGER.debug('[%d][%s] mesh_status_callback(%s)',
-                      status['mesh_id'], self._devices[status['mesh_id']]['name'], status)
+        _LOGGER.debug('[%s][%s][%d] mesh_status_callback(%s)',
+                      self.mesh_name, self._devices[status['mesh_id']]['name'], status['mesh_id'], status)
 
         if status['type'] != 'status':
-            _LOGGER.debug('[%d][%s] skipping all non status callbacks',
-                      status['mesh_id'], self._devices[status['mesh_id']]['name'])
+            _LOGGER.debug('[%s][%s][%d] skipping all non status callbacks',
+                      self.mesh_name, self._devices[status['mesh_id']]['name'], status['mesh_id'])
             return
 
         self._devices[status['mesh_id']]['callback'](status)
@@ -219,17 +226,17 @@ class AwoxMesh(DataUpdateCoordinator):
             async with async_timeout.timeout(10):
                 await self.hass.async_add_executor_job(device.disconnect)
         except Exception as e:
-            _LOGGER.exception('Failed to disconnect [%s]', e)
+            _LOGGER.exception('[%s] Failed to disconnect [%s] %s', self.mesh_name, type(e).__name__, e)
 
         await self._async_update_mesh_state()
 
     async def async_shutdown(self):
-        _LOGGER.info('Shutdown mesh')
+        _LOGGER.info('[%s] Shutdown mesh', self.mesh_name)
         self._shutdown = True
         return await self._disconnect_current_device()
 
     async def _async_add_command_to_queue(self, command: str, params, allow_to_fail: bool = False):
-        _LOGGER.info('Queue command %s %s', command, params)
+        _LOGGER.info('[%s] Queue command %s %s', self.mesh_name, command, params)
 
         if not self._command_tread.is_alive():
             raise UpdateFailed("Command tread died!")
@@ -252,17 +259,17 @@ class AwoxMesh(DataUpdateCoordinator):
     def _process_command_queue(self):
         while not self._shutdown:
 
-            _LOGGER.debug('get item from queue')
+            _LOGGER.debug('[%s] get item from queue', self.mesh_name)
             command = self._queue.get()
-            _LOGGER.debug('process 0/%d - %s', self._queue.qsize(), command)
+            _LOGGER.debug('[%s] process 0/%d - %s', self.mesh_name, self._queue.qsize(), command)
             try:
                 tries = 0
                 while not self._call_command(command) and tries < 3:
                     tries = tries + 1
-                    _LOGGER.warning('Command failed, retry %s', tries)
+                    _LOGGER.warning('[%s] Command failed, retry %s', self.mesh_name, tries)
 
             except Exception as e:
-                _LOGGER.exception('Command failed and skipped - %s', e)
+                _LOGGER.error('[%s] Command failed and skipped - [%s] %s', self.mesh_name, type(e).__name__, e)
                 asyncio.run_coroutine_threadsafe(
                     self._disconnect_current_device(), self.hass.loop
                 ).result()
@@ -273,9 +280,7 @@ class AwoxMesh(DataUpdateCoordinator):
             self._queue.task_done()
 
     def _call_command(self, command) -> bool:
-        asyncio.run_coroutine_threadsafe(
-            self._async_connect_device(), self.hass.loop
-        ).result()
+        self._connect_device()
         if not self.is_connected():
             return False
 
@@ -286,16 +291,17 @@ class AwoxMesh(DataUpdateCoordinator):
                 result = getattr(self._connected_bluetooth_device, command['command'])(*command['params'])
             else:
                 result = getattr(self._connected_bluetooth_device, command['command'])(**command['params'])
+            _LOGGER.debug(f'[{self.mesh_name}] Send command {command["command"]} got result {result}')
         except Exception as e:
-            _LOGGER.warning('Command failed, re-connecting for new attempt - %s', e)
+            _LOGGER.exception('[%s] Command failed, re-connecting for new attempt - [%s] %s', self.mesh_name, type(e).__name__, e)
             result = None
             failed = True
 
-        _LOGGER.debug('Command result: %s', result)
+        _LOGGER.debug('[%s] Command result: %s', self.mesh_name, result)
 
         # We always expect result else we assume command wasn't successful
         if result is None and not command['allow_to_fail'] and not failed:
-            _LOGGER.warning('Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting')
+            _LOGGER.warning('[%s] Timeout executing command, probably Bluetooth connection is lost/frozen, re-connecting', self.mesh_name)
             failed = True
 
         if failed:
@@ -309,6 +315,11 @@ class AwoxMesh(DataUpdateCoordinator):
 
         return True
 
+    def _connect_device(self):
+        asyncio.run_coroutine_threadsafe(
+            self._async_connect_device(), self.hass.loop
+        ).result()
+
     async def _async_connect_device(self):
         if self.is_connected():
             return
@@ -319,46 +330,45 @@ class AwoxMesh(DataUpdateCoordinator):
 
             device = AwoxMeshLight(device_info['mac'], self._mesh_name, self._mesh_password, mesh_id)
             try:
-                _LOGGER.info("[%s][%s] Trying to connect", device.mac, device_info['name'])
+                _LOGGER.info("[%s][%s][%s] Trying to connect", self.mesh_name, device_info['name'], device.mac)
                 async with async_timeout.timeout(20):
                     if await self.hass.async_add_executor_job(device.connect):
                         self._connected_bluetooth_device = device
                         self._state['connected_device'] = device_info['name']
                         self._state['last_connection'] = dt_util.now()
                         await self._async_update_mesh_state()
-                        _LOGGER.info("[%s][%s] Connected", device.mac, device_info['name'])
+                        _LOGGER.info("[%s][%s][%s] Connected", self.mesh_name, device_info['name'], device.mac)
                         break
                     else:
-                        _LOGGER.info("[%s][%s] Could not connect", device.mac, device_info['name'])
+                        _LOGGER.info("[%s][%s][%s] Could not connect", self.mesh_name, device_info['name'], device.mac)
             except Exception as e:
-                _LOGGER.exception('exception %s', e)
-                _LOGGER.info('[%s][%s] Failed to connect, trying next device [%s]',
-                                  device.mac, device_info['name'], e)
+                _LOGGER.info('[%s][%s][%s] Failed to connect, trying next device [%s] %s',
+                                  self.mesh_name, device_info['name'], device.mac, type(e).__name__, e)
 
-            _LOGGER.debug('[%s][%s] Setting up Bluetooth connection failed, making sure Bluetooth device stops trying', device.mac, device_info['name'])
+            _LOGGER.debug('[%s][%s][%s] Setting up Bluetooth connection failed, making sure Bluetooth device stops trying', self.mesh_name, device_info['name'], device.mac)
             await self.hass.async_add_executor_job(device.stop)
 
         if self._connected_bluetooth_device is not None:
             self._connected_bluetooth_device.status_callback = self.mesh_status_callback
 
     async def _async_get_devices_rssi(self):
-        _LOGGER.info('Search for AwoX devices to find closest (best RSSI value) device')
+        _LOGGER.info(f'[{self.mesh_name}] Search for AwoX devices to find closest (best RSSI value) device')
         devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=20)
 
-        _LOGGER.debug('Scan result: %s', devices)
+        _LOGGER.debug(f'[{self.mesh_name}] Scan result: {devices}')
 
         for mesh_id, device_info in self._devices.items():
             if device_info['mac'].upper() in devices and devices[device_info['mac'].upper()]['rssi'] is not None:
-                _LOGGER.info('[%s][%s] Bluetooth scan returns RSSI value = %s', device_info['mac'], device_info['name'],
-                             devices[device_info['mac'].upper()]['rssi'])
+                _LOGGER.info('[%s][%s][%s] Bluetooth scan returns RSSI value = %s', self.mesh_name, device_info['name'],
+                             device_info['mac'], devices[device_info['mac'].upper()]['rssi'])
                 self._devices[mesh_id]['rssi'] = devices[device_info['mac'].upper()]['rssi']
 
             elif device_info['mac'].upper() in devices:
-                _LOGGER.info('[%s][%s] Bluetooth scan returns no RSSI value', device_info['mac'], device_info['name'])
+                _LOGGER.info('[%s][%s][%s] Bluetooth scan returns no RSSI value', self.mesh_name, device_info['name'], device_info['mac'])
                 self._devices[mesh_id]['rssi'] = -99999
 
             else:
-                _LOGGER.info('[%s][%s] Device NOT found during Bluetooth scan', device_info['mac'], device_info['name'])
+                _LOGGER.info('[%s][%s][%s] Device NOT found during Bluetooth scan', self.mesh_name, device_info['name'], device_info['mac'])
                 self._devices[mesh_id]['rssi'] = -999999
 
         self._state['last_rssi_check'] = dt_util.now()

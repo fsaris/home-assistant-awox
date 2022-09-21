@@ -90,11 +90,11 @@ logger = logging.getLogger(__name__)
 class AwoxAdapter(pygatt.GATTToolBackend):
 
     def connect(self, address, timeout=DEFAULT_CONNECT_TIMEOUT_S,
-                address_type=BLEAddressType.public, auto_reconnect=False):
+                address_type=BLEAddressType.public, _reconnecting=False):
         logger.info('Connecting to %s with timeout=%s', address, timeout)
         self.sendline('sec-level low')
         self._address = address
-        self._auto_reconnect = auto_reconnect
+        self.__reconnecting = _reconnecting
 
         try:
             cmd = 'connect {0} {1}'.format(self._address, address_type.name)
@@ -118,7 +118,6 @@ class AwoxDevice(GATTToolBLEDevice):
 
     def __init__(self, address, backend):
         super(AwoxDevice, self).__init__(address, backend)
-        logger.debug(f'init connected?:{self._connected}')
 
     def _notification_handles(self, uuid):
         # Expect notifications on the value handle...
@@ -128,6 +127,10 @@ class AwoxDevice(GATTToolBLEDevice):
         characteristic_config_handle = value_handle
 
         return value_handle, characteristic_config_handle
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
 
 class AwoxMeshLight:
     def __init__(self, mac, mesh_name="unpaired", mesh_password="1234", mesh_id=0):
@@ -146,6 +149,10 @@ class AwoxMeshLight:
 
         self.command_char = None
         self.status_char = None
+
+        self._reconnecting = False
+        self.reconnect_counter = 0
+        self.adapter = AwoxAdapter()
 
         self.mesh_name = mesh_name.encode()
         self.mesh_password = mesh_password.encode()
@@ -174,29 +181,12 @@ class AwoxMeshLight:
         assert len(self.mesh_name) <= 16, "mesh_name can hold max 16 bytes"
         assert len(self.mesh_password) <= 16, "mesh_password can hold max 16 bytes"
 
-        def handleNotification(cHandle, data):
-
-            if self.session_key is None:
-                logger.info(
-                    "Device [%s] is disconnected, ignoring received notification [unable to decrypt without active session]",
-                    self.mac)
-                return
-
-            message = pckt.decrypt_packet(self.session_key, self.mac, data)
-            if message is None:
-                logger.warning("Failed to decrypt package [key: %s, data: %s]", self.session_key, data)
-                return
-
-            logger.debug("Received notification %s", message)
-
-            self.parseStatusResult(message)
-
-        self.adapter = AwoxAdapter()
         self.adapter.start()
         self.btdevice = self.adapter.connect(self.mac, timeout=15)
+        self.btdevice.register_disconnect_callback(self._disconnectCallback)
 
-        self.session_random = urandom(8)
-        message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, self.session_random)
+        session_random = urandom(8)
+        message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, session_random)
 
         logger.info(f'send pair message {message}')
         self.btdevice.char_write(PAIR_CHAR_UUID, message)
@@ -206,7 +196,7 @@ class AwoxMeshLight:
         logger.debug(f"Read {reply} from characteristic {PAIR_CHAR_UUID}")
 
         if reply[0] == 0xd:
-            self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, self.session_random, reply[1:9])
+            self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, session_random, reply[1:9])
         else:
             if reply[0] == 0xe:
                 logger.info("Auth error : check name and password.")
@@ -217,13 +207,28 @@ class AwoxMeshLight:
 
 
         logger.debug('listen for notifications')
-        self.btdevice.subscribe(STATUS_CHAR_UUID, callback=handleNotification)
+        self.btdevice.subscribe(STATUS_CHAR_UUID, callback=self._handleNotification)
 
         logger.debug('send status message')
         self.btdevice.char_write(STATUS_CHAR_UUID, b'\x01')
 
         return True
 
+    def _disconnectCallback(self, event):
+        logger.info(f'Disconnected {self.mac} - {event}')
+        if self.session_key:
+            logger.info('Try to reconnect...')
+            self.session_key = None
+            self.reconnect_counter = 0
+            self._reconnecting = True
+            while self.session_key is None and self.reconnect_counter < 3 and self._reconnecting:
+                try:
+                    self.reconnect()
+                except Exception as err:
+                    self.reconnect_counter += 1
+                    time.sleep(1)
+
+            self._reconnecting = False
 
     def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
         """
@@ -297,7 +302,7 @@ class AwoxMeshLight:
         self.writeCommand(C_MESH_ADDRESS, data)
         self.mesh_id = mesh_id
 
-    def writeCommand(self, command, data, dest=None, withResponse=True):
+    def writeCommand(self, command, data, dest=None, withResponse=True, attempt=0):
         """
         Args:
             command: The command, as a number.
@@ -313,8 +318,17 @@ class AwoxMeshLight:
             logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
             self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
             return True
+        except (NotConnectedError, NotificationTimeout) as err:
+            logger.warning(f'command failed, attempt: {attempt} - [%s] %s', type(err).__name__, err)
+            if attempt < 2:
+                self.reconnect()
+                return self.writeCommand(command, data, dest, withResponse, attempt+1)
+            else:
+                self.session_key = None
+                raise err
+
         except Exception as err:
-            logger.error('Command failed, device is disconnected: %s', err)
+            logger.exception('Command failed, device is disconnected: %s', err)
             self.session_key = None
             raise err
 
@@ -328,7 +342,24 @@ class AwoxMeshLight:
         packet = self.status_char.read()
         return pckt.decrypt_packet(self.session_key, self.mac, packet)
 
-    def parseStatusResult(self, data):
+    def _handleNotification(self, cHandle, data):
+
+        if self.session_key is None:
+            logger.info(
+                "Device [%s] is disconnected, ignoring received notification [unable to decrypt without active session]",
+                self.mac)
+            return
+
+        message = pckt.decrypt_packet(self.session_key, self.mac, data)
+        if message is None:
+            logger.warning("Failed to decrypt package [key: %s, data: %s]", self.session_key, data)
+            return
+
+        logger.debug("Received notification %s", message)
+
+        self._parseStatusResult(message)
+
+    def _parseStatusResult(self, data):
         command = struct.unpack('B', data[7:8])[0]
         status = {}
         if command == C_GET_STATUS_RECEIVED:
@@ -481,23 +512,28 @@ class AwoxMeshLight:
 
     def disconnect(self):
         logger.debug("Disconnecting.")
+        self.session_key = None
+        self._reconnecting = False
+
         try:
             self.btdevice.disconnect()
             self.adapter.stop()
         except Exception as err:
-            logger.warning('Disconnect failed: %s', err)
+            logger.warning('Disconnect failed: [%s] %s', type(err).__name__, err)
             self.stop()
 
-        self.session_key = None
 
     def stop(self):
         logger.debug("force stopping ble adapter")
+
+        self._reconnecting = False
+        self.session_key = None
+
         try:
             self.adapter.stop()
         except Exception as err:
-            logger.warning('Stop failed: %s', err)
+            logger.warning('Stop failed: [%s] %s', type(err).__name__, err)
 
-        self.session_key = None
 
     def getFirmwareRevision(self):
         """
@@ -519,3 +555,10 @@ class AwoxMeshLight:
             The model as a null terminated utf-8 string.
         """
         return self.btdevice.char_read(uuid=MODEL_NBR_UUID)
+
+    @property
+    def isconnected(self) -> bool:
+        return self.session_key is not None and self.btdevice and self.btdevice.connected
+    @property
+    def reconnecting(self) -> bool:
+        return self._reconnecting
