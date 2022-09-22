@@ -42,6 +42,7 @@ class AwoxMesh(DataUpdateCoordinator):
         self._mesh_long_term_key = mesh_long_term_key
 
         self._connected_bluetooth_device: AwoxMeshLight = None
+        self._scanning_devices = False
 
         self._state = {
             'last_rssi_check': None,
@@ -92,7 +93,8 @@ class AwoxMesh(DataUpdateCoordinator):
             'callback': callback_func,
             'last_update': None,
             'update_count': 0,
-            'status_request_count': 0
+            'status_request_count': 0,
+            'rssi': -999999
         }
 
         _LOGGER.info('[%s] Registered [%s] %d', self.mesh_name, mac, mesh_id)
@@ -324,7 +326,7 @@ class AwoxMesh(DataUpdateCoordinator):
         if self.is_connected():
             return
 
-        for mesh_id, device_info in self._devices.items():
+        for mesh_id, device_info in self._getConnectableDevices():
             if device_info['mac'] is None:
                 continue
 
@@ -346,13 +348,30 @@ class AwoxMesh(DataUpdateCoordinator):
                                   self.mesh_name, device_info['name'], device.mac, type(e).__name__, e)
 
             _LOGGER.debug('[%s][%s][%s] Setting up Bluetooth connection failed, making sure Bluetooth device stops trying', self.mesh_name, device_info['name'], device.mac)
+
             await self.hass.async_add_executor_job(device.stop)
 
         if self._connected_bluetooth_device is not None:
             self._connected_bluetooth_device.status_callback = self.mesh_status_callback
+        else:
+            # Force new RSSI check no device we could connect to
+            self._state['last_rssi_check'] = None
+            await self._async_update_mesh_state()
+
+    def _getConnectableDevices(self):
+        # Sort devices by rssi and only return devices with a RSSI that could be in range
+        return filter(lambda device: device[1]['rssi'] > -9999, sorted(self._devices.items(), key=lambda t: t[1]['rssi'], reverse=True))
 
     async def _async_get_devices_rssi(self):
+
+        if self._scanning_devices:
+            _LOGGER.info(f'[{self.mesh_name}] Already scanning for devices')
+            return
+
         _LOGGER.info(f'[{self.mesh_name}] Search for AwoX devices to find closest (best RSSI value) device')
+
+        self._scanning_devices = True
+
         devices = await DeviceScanner.async_find_devices(hass=self.hass, scan_timeout=20)
 
         _LOGGER.debug(f'[{self.mesh_name}] Scan result: {devices}')
@@ -374,5 +393,4 @@ class AwoxMesh(DataUpdateCoordinator):
         self._state['last_rssi_check'] = dt_util.now()
         await self._async_update_mesh_state()
 
-        # Sort devices by rssi
-        self._devices = dict(sorted(self._devices.items(), key=lambda t: t[1]['rssi'], reverse=True))
+        self._scanning_devices = False
