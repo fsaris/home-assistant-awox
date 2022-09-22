@@ -199,7 +199,7 @@ class AwoxMeshLight:
             self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, session_random, reply[1:9])
         else:
             if reply[0] == 0xe:
-                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Auth error : check name and password.')
+                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Device authentication error: known mesh credentials are not excepted by the device. Did you re-pair them to your Awox app with a different account?')
             else:
                 logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Unexpected pair value : {repr(reply)}')
             self.disconnect()
