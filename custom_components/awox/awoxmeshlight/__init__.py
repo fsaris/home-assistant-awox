@@ -14,6 +14,7 @@ from os import urandom
 import pygatt
 import logging
 import struct
+import threading
 import time
 import subprocess
 
@@ -169,7 +170,7 @@ class AwoxMeshLight:
         self.state = None
         self.status_callback = None
 
-    def connect(self, mesh_name=None, mesh_password=None):
+    def connect(self, mesh_name=None, mesh_password=None) -> bool:
         """
         Args :
             mesh_name: The mesh name as a string.
@@ -218,17 +219,22 @@ class AwoxMeshLight:
         logger.info(f'Disconnected {self.mac} - {event}')
         if self.session_key:
             logger.info('Try to reconnect...')
-            self.session_key = None
-            self.reconnect_counter = 0
-            self._reconnecting = True
-            while self.session_key is None and self.reconnect_counter < 3 and self._reconnecting:
-                try:
-                    self.reconnect()
-                except Exception as err:
-                    self.reconnect_counter += 1
-                    time.sleep(1)
+            reconnect_thread = threading.Thread(target=self._auto_reconnect)
+            reconnect_thread.start()
 
-            self._reconnecting = False
+    def _auto_reconnect(self):
+        self.session_key = None
+        self.reconnect_counter = 0
+        self._reconnecting = True
+        while self.session_key is None and self.reconnect_counter < 3 and self._reconnecting:
+            try:
+                if self.reconnect():
+                    break
+            except Exception as err:
+                self.reconnect_counter += 1
+                time.sleep(1)
+
+        self._reconnecting = False
 
     def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
         """
@@ -505,10 +511,10 @@ class AwoxMeshLight:
         """
         return self.writeCommand(C_POWER, b'\x00', dest)
 
-    def reconnect(self):
+    def reconnect(self) -> bool:
         logger.debug("Reconnecting.")
         self.session_key = None
-        self.connect()
+        return self.connect()
 
     def disconnect(self):
         logger.debug("Disconnecting.")
