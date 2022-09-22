@@ -100,7 +100,7 @@ class AwoxMesh(DataUpdateCoordinator):
         _LOGGER.info('[%s] Registered [%s] %d', self.mesh_name, mac, mesh_id)
 
     def is_connected(self) -> bool:
-        return self._connected_bluetooth_device and self._connected_bluetooth_device.isconnected
+        return self._connected_bluetooth_device and self._connected_bluetooth_device.is_connected
 
     def is_reconnecting(self) -> bool:
         return self._connected_bluetooth_device and self._connected_bluetooth_device.reconnecting
@@ -144,7 +144,7 @@ class AwoxMesh(DataUpdateCoordinator):
 
         for mesh_id, device_info in self._devices.items():
 
-            _LOGGER.debug(f'[{self.mesh_name}][{device_info["name"]}] update count: {device_info["update_count"]}; request count: {device_info["status_request_count"]}; last update: {device_info["last_update"]}')
+            _LOGGER.debug(f'[{self.mesh_name}][{device_info["name"]}] update count: {device_info["update_count"]}; request count: {device_info["status_request_count"]}; RSSI: {device_info["rssi"]}; last update: {device_info["last_update"]}')
 
             # Force status update for specific mesh_id when no new update for the last minute
             if device_info['last_update'] is None \
@@ -178,7 +178,7 @@ class AwoxMesh(DataUpdateCoordinator):
                 self._devices[mesh_id]['update_count'] = 0
 
     async def _async_update_mesh_state(self):
-        if not self.is_connected():
+        if not self.is_connected() and not self.is_reconnecting():
             self._state['connected_device'] = None
 
         for update_callback, _ in list(self._listeners.values()):
@@ -326,6 +326,10 @@ class AwoxMesh(DataUpdateCoordinator):
         ).result()
 
     async def _async_connect_device(self):
+
+        while self.is_reconnecting():
+            await asyncio.sleep(.01)
+
         if self.is_connected():
             return
 

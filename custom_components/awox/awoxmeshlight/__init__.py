@@ -189,37 +189,36 @@ class AwoxMeshLight:
         session_random = urandom(8)
         message = pckt.make_pair_packet(self.mesh_name, self.mesh_password, session_random)
 
-        logger.info(f'send pair message {message}')
+        logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Send pair message {message}')
         self.btdevice.char_write(PAIR_CHAR_UUID, message)
 
-        logger.info('read pair value')
         reply = self.btdevice.char_read_handle('1b')
-        logger.debug(f"Read {reply} from characteristic {PAIR_CHAR_UUID}")
+        logger.debug(f"[{self.mesh_name.decode()}][{self.mac}] Read {reply} from characteristic {PAIR_CHAR_UUID}")
 
         if reply[0] == 0xd:
             self.session_key = pckt.make_session_key(self.mesh_name, self.mesh_password, session_random, reply[1:9])
         else:
             if reply[0] == 0xe:
-                logger.info("Auth error : check name and password.")
+                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Auth error : check name and password.')
             else:
-                logger.info("Unexpected pair value : %s", repr(reply))
+                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Unexpected pair value : {repr(reply)}')
             self.disconnect()
             return False
 
 
-        logger.debug('listen for notifications')
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Listen for notifications')
         self.btdevice.subscribe(STATUS_CHAR_UUID, callback=self._handleNotification)
 
-        logger.debug('send status message')
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Send status message')
         self.btdevice.char_write(STATUS_CHAR_UUID, b'\x01')
 
         return True
 
     def _disconnectCallback(self, event):
-        logger.info(f'Disconnected {self.mac} - {event}')
+        logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Disconnected by backend')
         if self.session_key:
-            logger.info('Try to reconnect...')
-            reconnect_thread = threading.Thread(target=self._auto_reconnect)
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Try to reconnect...')
+            reconnect_thread = threading.Thread(target=self._auto_reconnect, name='Reconnect-' + self.mac)
             reconnect_thread.start()
 
     def _auto_reconnect(self):
@@ -232,9 +231,11 @@ class AwoxMeshLight:
                     break
             except Exception as err:
                 self.reconnect_counter += 1
+                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Failed to reconnect attempt {self.reconnect_counter} [{type(err).__name__}] {err}')
                 time.sleep(1)
 
         self._reconnecting = False
+        logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Reconnect done after attempt {self.reconnect_counter}, success: {self.is_connected}')
 
     def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
         """
@@ -249,7 +250,7 @@ class AwoxMeshLight:
             try:
                 connected = self.connect(mesh_name, mesh_password)
             except Exception:
-                logger.info("connection_error: retrying for %s time", attempts)
+                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Connection error: retrying for {attempts} time - [{type(err).__name__}] {err}')
             finally:
                 attempts += 1
 
@@ -290,10 +291,10 @@ class AwoxMeshLight:
         if reply[0] == 0x7:
             self.mesh_name = new_mesh_name.encode()
             self.mesh_password = new_mesh_password.encode()
-            logger.info("Mesh network settings accepted.")
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Mesh network settings accepted.')
             return True
         else:
-            logger.info("Mesh network settings change failed : %s", repr(reply))
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Mesh network settings change failed : {repr(reply)}')
             return False
 
     def setMeshId(self, mesh_id):
@@ -321,11 +322,11 @@ class AwoxMeshLight:
         packet = pckt.make_command_packet(self.session_key, self.mac, dest, command, data)
 
         try:
-            logger.info("[%s][%d] Writing command %i data %s", self.mac, dest, command, repr(data))
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Writing command {command} data {repr(data)}')
             self.btdevice.char_write(uuid=COMMAND_CHAR_UUID, value=packet, wait_for_response=withResponse)
             return True
         except (NotConnectedError, NotificationTimeout) as err:
-            logger.warning(f'command failed, attempt: {attempt} - [%s] %s', type(err).__name__, err)
+            logger.warning(f'[{self.mesh_name.decode()}][{self.mac}] Command failed, attempt: {attempt} - [{type(err).__name__}] {err}')
             if attempt < 2:
                 self.reconnect()
                 return self.writeCommand(command, data, dest, withResponse, attempt+1)
@@ -334,7 +335,7 @@ class AwoxMeshLight:
                 raise err
 
         except Exception as err:
-            logger.exception('Command failed, device is disconnected: %s', err)
+            logger.exception(f'[{self.mesh_name.decode()}][{self.mac}] Command failed, device is disconnected: [{type(err).__name__}] {err}', err)
             self.session_key = None
             raise err
 
@@ -351,17 +352,13 @@ class AwoxMeshLight:
     def _handleNotification(self, cHandle, data):
 
         if self.session_key is None:
-            logger.info(
-                "Device [%s] is disconnected, ignoring received notification [unable to decrypt without active session]",
-                self.mac)
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Device is disconnected, ignoring received notification [unable to decrypt without active session]')
             return
 
         message = pckt.decrypt_packet(self.session_key, self.mac, data)
         if message is None:
-            logger.warning("Failed to decrypt package [key: %s, data: %s]", self.session_key, data)
+            logger.warning(f'[{self.mesh_name.decode()}][{self.mac}] Failed to decrypt package [key: {self.session_key}, data: {data}]')
             return
-
-        logger.debug("Received notification %s", message)
 
         self._parseStatusResult(message)
 
@@ -408,12 +405,12 @@ class AwoxMeshLight:
             }
 
         if status:
-            logger.debug('parsed status %s', status)
+            logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Parsed status: {status}')
         else:
-            logger.error('Unknown command [%d]', command)
+            logger.error(f'[{self.mesh_name.decode()}][{self.mac}] Unknown command [{command}]')
 
         if status and status['mesh_id'] == self.mesh_id:
-            logger.info('Update device status - mesh_id %d', status['mesh_id'])
+            logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Update device status - mesh_id: {status["mesh_id"]}')
             self.state = status['state']
             self.color_mode = status['color_mode']
             self.transition_mode = status['transition_mode']
@@ -428,7 +425,7 @@ class AwoxMeshLight:
             self.status_callback(status)
 
     def requestStatus(self, dest=None, withResponse=False):
-        logger.debug('requestStatus(%s)', dest)
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] requestStatus({dest})')
         data = struct.pack('B', 16)
         return self.writeCommand(C_GET_STATUS_SENT, data, dest, withResponse)
 
@@ -512,12 +509,12 @@ class AwoxMeshLight:
         return self.writeCommand(C_POWER, b'\x00', dest)
 
     def reconnect(self) -> bool:
-        logger.debug("Reconnecting.")
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Reconnecting')
         self.session_key = None
         return self.connect()
 
     def disconnect(self):
-        logger.debug("Disconnecting.")
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Disconnecting')
         self.session_key = None
         self._reconnecting = False
 
@@ -525,12 +522,11 @@ class AwoxMeshLight:
             self.btdevice.disconnect()
             self.adapter.stop()
         except Exception as err:
-            logger.warning('Disconnect failed: [%s] %s', type(err).__name__, err)
+            logger.warning(f'[{self.mesh_name.decode()}][{self.mac}] Disconnect failed: [{type(err).__name__}] {err}')
             self.stop()
 
-
     def stop(self):
-        logger.debug("force stopping ble adapter")
+        logger.debug(f'[{self.mesh_name.decode()}][{self.mac}] Force stopping ble adapter')
 
         self._reconnecting = False
         self.session_key = None
@@ -538,8 +534,7 @@ class AwoxMeshLight:
         try:
             self.adapter.stop()
         except Exception as err:
-            logger.warning('Stop failed: [%s] %s', type(err).__name__, err)
-
+            logger.warning(f'[{self.mesh_name.decode()}][{self.mac}] Stop failed: [{type(err).__name__}] {err}')
 
     def getFirmwareRevision(self):
         """
@@ -563,8 +558,9 @@ class AwoxMeshLight:
         return self.btdevice.char_read(uuid=MODEL_NBR_UUID)
 
     @property
-    def isconnected(self) -> bool:
+    def is_connected(self) -> bool:
         return self.session_key is not None and self.btdevice and self.btdevice.connected
+
     @property
     def reconnecting(self) -> bool:
         return self._reconnecting
