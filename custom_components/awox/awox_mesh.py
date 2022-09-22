@@ -164,6 +164,9 @@ class AwoxMesh(DataUpdateCoordinator):
                 self._devices[mesh_id]['callback']({'state': None})
                 self._devices[mesh_id]['last_update'] = None
                 self._devices[mesh_id]['update_count'] = 0
+                # Device offline then we assume it's also out-of-range (device that's not always powered on for instance)
+                if self._devices[mesh_id]['rssi'] > -9999:
+                    self._devices[mesh_id]['rssi'] = -9999
 
         return self._state
 
