@@ -1,15 +1,14 @@
 {
   "domain": "awox",
   "name": "AwoX MESH control",
-  "version": "0.1.4b1",
+  "version": "0.1.4b2",
   "documentation": "https://github.com/fsaris/home-assistant-awox",
   "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
-  "dependencies": [],
+  "dependencies": ["bluetooth"],
   "codeowners": [
     "@fsaris"
   ],
   "requirements": [
-    "bleak>=0.15.1",
     "pexpect>=4.6.0",
     "pycryptodome>=3.6.6",
     "pygatt[GATTTOOL]>=4.0.5"

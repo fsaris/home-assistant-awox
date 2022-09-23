@@ -2,12 +2,10 @@
 import asyncio
 import async_timeout
 import logging
-
+from homeassistant.components import bluetooth
 from homeassistant.core import HomeAssistant
 from .awoxmeshlight import AwoxMeshLight
 # import awoxmeshlight from .awoxmeshlight
-from bleak import BleakScanner
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,12 +30,14 @@ class DeviceScanner:
     @staticmethod
     async def async_find_devices(hass: HomeAssistant, scan_timeout: int = 30):
 
+        bleak_scanner = bluetooth.async_get_scanner(hass)
+
         devices = {}
         try:
             _LOGGER.info("Scanning %d seconds for AwoX bluetooth mesh devices!", scan_timeout)
 
             discovered = await asyncio.wait_for(
-                BleakScanner.discover(timeout=scan_timeout), scan_timeout * 2)
+                bleak_scanner.discover(timeout=scan_timeout), scan_timeout * 2)
 
             _LOGGER.debug('Found ble devices: %s', discovered)
 
