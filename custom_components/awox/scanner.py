@@ -30,29 +30,19 @@ class DeviceScanner:
     @staticmethod
     async def async_find_devices(hass: HomeAssistant, scan_timeout: int = 30):
 
-        bleak_scanner = bluetooth.async_get_scanner(hass)
-
+        service_infos = bluetooth.async_discovered_service_info(hass, connectable=True)
         devices = {}
-        try:
-            _LOGGER.info("Scanning %d seconds for AwoX bluetooth mesh devices!", scan_timeout)
 
-            discovered = await asyncio.wait_for(
-                bleak_scanner.discover(timeout=scan_timeout), scan_timeout * 2)
+        for info in service_infos:
+            _LOGGER.info(f'found {info.device}')
+            if info.device.address.startswith(START_MAC_ADDRESS):
+                devices[info.device.address] = {
+                    'mac': info.device.address,
+                    'rssi': info.device.rssi,
+                    'name': info.device.name
+                    }
 
-            _LOGGER.debug('Found ble devices: %s', discovered)
-
-            for device in discovered:
-                if device.address.startswith(START_MAC_ADDRESS):
-                    devices[device.address] = {
-                        'mac': device.address,
-                        'rssi': device.rssi,
-                        'name': device.name
-                        }
-
-            _LOGGER.debug('Found awox devices: %s', devices)
-
-        except Exception as e:
-            _LOGGER.exception('Find devices process error: %s', e)
+        _LOGGER.debug('Found awox devices: %s', devices)
 
         return devices
 
