@@ -1,7 +1,7 @@
 {
   "domain": "awox",
   "name": "AwoX MESH control",
-  "version": "0.1.4b3",
+  "version": "0.1.4b4",
   "documentation": "https://github.com/fsaris/home-assistant-awox",
   "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
   "dependencies": ["bluetooth"],

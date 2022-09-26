@@ -235,26 +235,11 @@ class AwoxMeshLight:
                 time.sleep(1)
 
         self._reconnecting = False
+
         logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Reconnect done after attempt {self.reconnect_counter}, success: {self.is_connected}')
 
-    def connectWithRetry(self, num_tries=1, mesh_name=None, mesh_password=None):
-        """
-        Args:
-           num_tries: The number of attempts to connect.
-           mesh_name: The mesh name as a string.
-           mesh_password: The mesh password as a string.
-        """
-        connected = False
-        attempts = 0
-        while (not connected and attempts < num_tries):
-            try:
-                connected = self.connect(mesh_name, mesh_password)
-            except Exception:
-                logger.info(f'[{self.mesh_name.decode()}][{self.mac}] Connection error: retrying for {attempts} time - [{type(err).__name__}] {err}')
-            finally:
-                attempts += 1
-
-        return connected
+        if not self.is_connected:
+            self.stop()
 
     def setMesh(self, new_mesh_name, new_mesh_password, new_mesh_long_term_key):
         """
