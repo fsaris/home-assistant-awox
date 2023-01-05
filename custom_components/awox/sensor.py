@@ -15,11 +15,9 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
-)
-from homeassistant.const import (
-    DEVICE_CLASS_TIMESTAMP,
 )
 from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN
@@ -36,7 +34,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key='last_rssi_check',
         name="AwoX mesh last RSSI check",
-        device_class=DEVICE_CLASS_TIMESTAMP,
+        device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:calendar-clock",
         entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -44,7 +42,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key='last_connection',
         name="AwoX mesh last connection",
-        device_class=DEVICE_CLASS_TIMESTAMP,
+        device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:calendar-clock",
         entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
