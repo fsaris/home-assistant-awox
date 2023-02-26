@@ -1,18 +1,18 @@
 {
   "domain": "awox",
   "name": "AwoX MESH control",
-  "version": "0.1.4",
-  "documentation": "https://github.com/fsaris/home-assistant-awox",
-  "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
-  "dependencies": [],
   "codeowners": [
     "@fsaris"
   ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/fsaris/home-assistant-awox",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
   "requirements": [
     "pexpect>=4.6.0",
     "pycryptodome>=3.6.6",
     "pygatt[GATTTOOL]>=4.0.5"
   ],
-  "config_flow": true,
-  "iot_class": "local_push"
+  "version": "0.1.4"
 }
