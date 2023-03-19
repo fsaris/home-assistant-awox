@@ -1,3 +1,5 @@
+> please consider to switch to a dedicated ESP32 module with https://github.com/fsaris/EspHome-AwoX-BLE-mesh-hub it's more stable then this HA integration 
+
 # AwoX MESH control component for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz/)
