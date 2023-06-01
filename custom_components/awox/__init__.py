@@ -35,7 +35,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Make `mesh` accessible for all platforms
     hass.data[DOMAIN][entry.entry_id] = mesh
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    load_ok = all(                                                                                              
+        await asyncio.gather(                                                                                   
+            *[                                                       
+                hass.config_entries.async_forward_entry_setup(entry, component)
+                for component in PLATFORMS                                     
+            ]                                                                  
+        )                                                                      
+    )
 
     return True
 
