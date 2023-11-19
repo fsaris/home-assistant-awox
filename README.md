@@ -1,4 +1,7 @@
-> please consider to switch to a dedicated ESP32 module with https://github.com/fsaris/EspHome-AwoX-BLE-mesh-hub it's more stable then this HA integration 
+> [!WARNING]
+> Please consider to switch to a dedicated ESP32 module with https://github.com/fsaris/EspHome-AwoX-BLE-mesh-hub it's more stable then this HA integration
+>
+> Until [#110](https://github.com/fsaris/home-assistant-awox/issues/110) can be resolved development of this integration is put on hold
 
 # AwoX MESH control component for Home Assistant
 
@@ -46,6 +49,7 @@ sudo apt install bluetooth libbluetooth-dev
 ```
 _(already part of Home Assistant Operating System / HassOS)_
 
+> [!TIP]
 > Make sure that at least **1 device/light** is in **bluetooth range** of your Home Assistant server.
 
 ### Install with HACS (recommended)
