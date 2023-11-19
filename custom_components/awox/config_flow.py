@@ -128,7 +128,7 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         awox_connect = None
 
         if user_input is not None:
-            username = user_input.get(CONF_USERNAME)
+            username = user_input.get(CONF_USERNAME).lower()
             password = user_input.get(CONF_PASSWORD)
 
         if username and password:
