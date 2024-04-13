@@ -72,7 +72,7 @@ class Bluetoothctl:
             if device_name_search:
                 devices[address]['name'] = device_name_search.group(2)
 
-            rssi_search = re.search(r'RSSI: (-[0-9]+)$', line)
+            rssi_search = re.search(r'RSSI: (?:0x[0-9a-f]{8})? \((-[0-9]+)\)$', line)
             if rssi_search:
                 devices[address]['rssi'] = int(rssi_search.group(1))
         logger.info('found: %s', devices)
