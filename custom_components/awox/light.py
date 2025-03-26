@@ -269,7 +269,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
         _LOGGER.debug('[%s][%s] mode[%s] Status callback: %s', self.unique_id, self.name, self._attr_color_mode, status)
 
-        self.async_write_ha_state()
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
     @callback
     def _handle_coordinator_update(self) -> None:
