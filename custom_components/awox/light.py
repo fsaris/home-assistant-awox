@@ -64,7 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if 'temperature' in type_string:
             supported_color_modes.add(ColorMode.COLOR_TEMP)
 
-        if 'dimming' in type_string:
+        if len(supported_color_modes) == 0 and 'dimming' in type_string:
             supported_color_modes.add(ColorMode.BRIGHTNESS)
 
         if len(supported_color_modes) == 0:
