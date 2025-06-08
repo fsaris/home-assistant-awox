@@ -154,6 +154,9 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             if 'type' not in device:
                 _LOGGER.warning('Skipped device, missing type - %s', device)
                 continue
+            if not device['type'].startswith('.ble.tlmesh'):
+                _LOGGER.warning('Skipped device, invalid type - %s', device['type'])
+                continue
             if 'address' not in device or not device['address']:
                 _LOGGER.warning('Skipped device, missing address - %s', device)
                 continue
@@ -189,14 +192,13 @@ class AwoxMeshFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         credentials = await self.hass.async_add_executor_job(awox_connect.credentials)
 
+        if credentials is None:
+            return self.async_abort(reason="no_mesh_credentials_found")
+
         data = {
             CONF_MESH_NAME: credentials['client_id'],
             CONF_MESH_PASSWORD: credentials['access_token'],
             CONF_MESH_KEY: credentials['refresh_token'],
-            # 'awox_connect': {
-            #     CONF_USERNAME: user_input[CONF_USERNAME],
-            #     CONF_PASSWORD: user_input[CONF_PASSWORD]
-            # },
             'devices': devices
         }
 
