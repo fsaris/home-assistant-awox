@@ -19,7 +19,16 @@ class _ColorMode:
 
 
 class _FakeLightEntity:
-    pass
+    @property
+    def unique_id(self):
+        return getattr(self, "_attr_unique_id", None)
+
+    @property
+    def name(self):
+        return getattr(self, "_attr_name", None)
+
+    def async_write_ha_state(self):
+        pass
 
 
 class _FakeCoordinatorEntity:

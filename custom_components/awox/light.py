@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_RGB_COLOR,
     LightEntity,
     ColorMode
@@ -111,6 +111,7 @@ class AwoxLight(CoordinatorEntity, LightEntity):
 
         self._state = None
         self._color_mode = False
+        self._attr_color_mode = None
         self._red = None
         self._green = None
         self._blue = None
@@ -161,11 +162,17 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         )
 
     @property
-    def color_temp(self):
-        """Return the color temperature in mired."""
+    def color_temp_kelvin(self):
+        """Return the color temperature in kelvin."""
         if self._white_temperature is None:
             return None
-        return convert_value_to_available_range(self._white_temperature, 0, int(0x7f), self.min_mireds, self.max_mireds)
+        # Device scale: 0 = coolest (6500K), 0x7f = warmest (2700K)
+        # Kelvin scale: higher = cooler — so invert device value before mapping
+        inverted = int(0x7f) - self._white_temperature
+        return convert_value_to_available_range(
+            inverted, 0, int(0x7f),
+            self.min_color_temp_kelvin, self.max_color_temp_kelvin
+        )
 
     @property
     def brightness(self):
@@ -181,14 +188,12 @@ class AwoxLight(CoordinatorEntity, LightEntity):
         return convert_value_to_available_range(self._color_brightness, int(0xa), int(0x64), 0, 255)
 
     @property
-    def min_mireds(self):
-        # 6500 Kelvin
-        return 153
+    def min_color_temp_kelvin(self):
+        return 2700
 
     @property
-    def max_mireds(self):
-        # 2700 Kelvin
-        return 370
+    def max_color_temp_kelvin(self):
+        return 6500
 
     @property
     def is_on(self):
@@ -220,8 +225,14 @@ class AwoxLight(CoordinatorEntity, LightEntity):
                 await self._mesh.async_set_color_brightness(self._mesh_id, device_brightness)
                 status['color_brightness'] = device_brightness
 
-        if ATTR_COLOR_TEMP in kwargs:
-            device_white_temp = convert_value_to_available_range(kwargs[ATTR_COLOR_TEMP], self.min_mireds, self.max_mireds, 0, int(0x7f))
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            # Map kelvin to device 0-0x7f, then invert (kelvin and device scales run opposite)
+            mapped = convert_value_to_available_range(
+                kwargs[ATTR_COLOR_TEMP_KELVIN],
+                self.min_color_temp_kelvin, self.max_color_temp_kelvin,
+                0, int(0x7f)
+            )
+            device_white_temp = int(0x7f) - mapped
             await self._mesh.async_set_white_temperature(self._mesh_id, device_white_temp)
             status['state'] = True
             status['white_temperature'] = device_white_temp
