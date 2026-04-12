@@ -7,6 +7,7 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/fsaris/home-assistant-awox",
+  "homeassistant": "2026.3.0",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/fsaris/home-assistant-awox/issues",
   "requirements": [
@@ -14,5 +15,5 @@
     "pycryptodome>=3.6.6",
     "pygatt[GATTTOOL]>=4.0.5"
   ],
-  "version": "0.1.7"
+  "version": "0.2.0"
 }
