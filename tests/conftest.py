@@ -52,7 +52,6 @@ _mocks = {
     "homeassistant.components.light": _make_module(
         "homeassistant.components.light",
         ATTR_BRIGHTNESS="brightness",
-        ATTR_COLOR_TEMP="color_temp",
         ATTR_COLOR_TEMP_KELVIN="color_temp_kelvin",
         ATTR_RGB_COLOR="rgb_color",
         DOMAIN="light",
