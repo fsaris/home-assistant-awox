@@ -1,0 +1,7 @@
+[project]
+name = "home-assistant-awox"
+version = "0.2.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
